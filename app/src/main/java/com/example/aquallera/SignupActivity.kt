@@ -3,6 +3,7 @@ package com.example.aquallera
 import android.content.Intent
 import android.os.Bundle
 import android.util.Log
+import android.view.View
 import android.widget.Button
 import android.widget.EditText
 import android.widget.TextView
@@ -22,6 +23,7 @@ class SignupActivity : AppCompatActivity() {
     private lateinit var etConfirmPassword: EditText
     private lateinit var btnSignup: Button
     private lateinit var tvLogin: TextView
+    private lateinit var btnBack: View
     private lateinit var auth: FirebaseAuth
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -41,6 +43,7 @@ class SignupActivity : AppCompatActivity() {
         etConfirmPassword = findViewById(R.id.ConfirmPasswordInput)
         btnSignup = findViewById(R.id.SignUpBtn)
         tvLogin = findViewById(R.id.GoToLoginBtn)
+        btnBack = findViewById(R.id.btnBack)
         // Removed: btnGetLocation, tvLocationStatus
     }
 
@@ -189,6 +192,10 @@ class SignupActivity : AppCompatActivity() {
         tvLogin.setOnClickListener {
             val intent = Intent(this, LoginActivity::class.java)
             startActivity(intent)
+        }
+
+        btnBack.setOnClickListener {
+            finish()
         }
     }
 }

@@ -3,6 +3,7 @@ package com.example.aquallera
 import android.content.Intent
 import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
+import android.view.View
 import android.widget.Button
 import android.widget.EditText
 import android.widget.TextView
@@ -17,6 +18,7 @@ class LoginActivity : AppCompatActivity() {
     private lateinit var etPassword: EditText
     private lateinit var btnLogin: Button
     private lateinit var tvSignup: TextView
+    private lateinit var btnBack: View
     private lateinit var auth: FirebaseAuth
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -36,6 +38,7 @@ class LoginActivity : AppCompatActivity() {
         etPassword = findViewById(R.id.LoginPasswordInput)
         btnLogin = findViewById(R.id.LoginButton)
         tvSignup = findViewById(R.id.GoToSignupBtn)
+        btnBack = findViewById(R.id.btnBack)
     }
 
     private fun checkExistingSession() {
@@ -136,6 +139,10 @@ class LoginActivity : AppCompatActivity() {
         tvSignup.setOnClickListener {
             val intent = Intent(this, SignupActivity::class.java)
             startActivity(intent)
+        }
+
+        btnBack.setOnClickListener {
+            finish()
         }
     }
 }

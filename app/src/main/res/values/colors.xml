@@ -31,4 +31,8 @@
     <color name="status_ready">#009688</color>
     <color name="status_completed">#4CAF50</color>
     <color name="status_cancelled">#F44336</color>
+
+    <color name="gray_300">#D3D3D3</color>
+    <color name="gray_500">#6B7280</color>
+    <color name="gray_600">#4B5563</color>
 </resources>
