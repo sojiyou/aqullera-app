@@ -94,6 +94,16 @@
             android:exported="false"
             android:label="Order Success"/>
 
+        <!-- Verify Email Activity -->
+        <activity android:name=".VerifyEmailActivity"
+            android:exported="false"
+            android:label="Verify Email" />
+
+        <!-- About Activity -->
+        <activity android:name=".AboutActivity"
+            android:exported="false"
+            android:label="About Aquallera" />
+
     </application>
 
 </manifest>

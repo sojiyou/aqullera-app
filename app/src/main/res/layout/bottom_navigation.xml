@@ -2,8 +2,8 @@
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/bottomNavigation"
     android:layout_width="match_parent"
-    android:layout_height="60dp"
-    android:background="@color/midnight_blue"
+    android:layout_height="56dp"
+    android:background="@color/footer_bg"
     android:orientation="horizontal"
     android:gravity="center_vertical"
     android:paddingTop="10dp"
@@ -31,6 +31,7 @@
             android:layout_height="wrap_content"
             android:text="@string/MapTabDesc"
             android:textSize="12sp"
+            android:textColor="@color/light_yellow"
             android:textColor="@color/light_yellow"/>
     </LinearLayout>
 
@@ -39,6 +40,7 @@
         android:layout_width="1dp"
         android:layout_height="40dp"
         android:background="@color/light_yellow"
+        android:alpha="0.3"
         android:layout_gravity="center_vertical" />
 
     <!-- Orders Tab -->
@@ -71,6 +73,7 @@
         android:layout_width="1dp"
         android:layout_height="40dp"
         android:background="@color/light_yellow"
+        android:alpha="0.3"
         android:layout_gravity="center_vertical" />
 
     <!-- Profile Tab -->

@@ -4,29 +4,49 @@ import android.content.Intent
 import android.graphics.Color
 import android.os.Bundle
 import android.widget.Button
-import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
+import android.widget.Toast
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
+import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.database.DataSnapshot
 import com.google.firebase.database.DatabaseError
 import com.google.firebase.database.ValueEventListener
 
 class ProfileActivity : AppCompatActivity() {
 
+    private lateinit var auth: FirebaseAuth
+
+    // Header
+    private lateinit var tvAvatarInitial: TextView
     private lateinit var tvUserName: TextView
     private lateinit var tvUserEmail: TextView
-    private lateinit var tvNumber: TextView
+
+    // Account Details
+    private lateinit var tvUserFullName: TextView
+    private lateinit var tvUserEmailDetail: TextView
+    private lateinit var tvUserNumber: TextView
+
+    // Email Verification
+    private lateinit var verifiedBanner: LinearLayout
+    private lateinit var unverifiedBanner: LinearLayout
+    private lateinit var btnResendVerification: Button
+    private lateinit var btnRefreshStatus: Button
+
+    // Buttons
     private lateinit var btnEditProfile: Button
-    private lateinit var btnLogOut: Button
     private lateinit var btnMaps: Button
-    private lateinit var btnSeeList: Button
-    private lateinit var ivProfileImage: ImageView
+    private lateinit var btnSeeOrders: Button
+    private lateinit var btnAbout: Button
+    private lateinit var btnLogOut: Button
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_profile)
+
+        auth = FirebaseAuth.getInstance()
 
         initializeViews()
         setupClickListeners()
@@ -35,159 +55,165 @@ class ProfileActivity : AppCompatActivity() {
     }
 
     private fun initializeViews() {
+        tvAvatarInitial = findViewById(R.id.tvAvatarInitial)
         tvUserName = findViewById(R.id.tvUserName)
         tvUserEmail = findViewById(R.id.tvUserEmail)
-        tvNumber = findViewById(R.id.tvUserNumber)
+        tvUserFullName = findViewById(R.id.tvUserFullName)
+        tvUserEmailDetail = findViewById(R.id.tvUserEmailDetail)
+        tvUserNumber = findViewById(R.id.tvUserNumber)
+
+        verifiedBanner = findViewById(R.id.verifiedBanner)
+        unverifiedBanner = findViewById(R.id.unverifiedBanner)
+        btnResendVerification = findViewById(R.id.btnResendVerification)
+        btnRefreshStatus = findViewById(R.id.btnRefreshStatus)
+
         btnEditProfile = findViewById(R.id.btnEditProfile)
-        btnLogOut = findViewById(R.id.btnLogOut)
         btnMaps = findViewById(R.id.btnMaps)
-        btnSeeList = findViewById(R.id.btnSeeList)
-        ivProfileImage = findViewById(R.id.ivProfileImage)
+        btnSeeOrders = findViewById(R.id.btnSeeOrders)
+        btnAbout = findViewById(R.id.btnAbout)
+        btnLogOut = findViewById(R.id.btnLogOut)
     }
 
     private fun setupClickListeners() {
         btnEditProfile.setOnClickListener {
-            val intent = Intent(this, EditProfileActivity::class.java)
-            startActivity(intent)
+            startActivity(Intent(this, EditProfileActivity::class.java))
+        }
+
+        btnMaps.setOnClickListener {
+            startActivity(Intent(this, MapActivity::class.java))
+        }
+
+        btnSeeOrders.setOnClickListener {
+            startActivity(Intent(this, OrdersActivity::class.java))
+        }
+
+        btnAbout.setOnClickListener {
+            startActivity(Intent(this, AboutActivity::class.java))
         }
 
         btnLogOut.setOnClickListener {
             showLogoutConfirmation()
         }
 
-        btnMaps.setOnClickListener {
-            val intent = Intent(this, MapActivity::class.java)
-            startActivity(intent)
+        btnResendVerification.setOnClickListener {
+            resendVerificationEmail()
         }
 
-        btnSeeList.setOnClickListener {
-            val intent = Intent(this, OrdersActivity::class.java)
-            startActivity(intent)
+        btnRefreshStatus.setOnClickListener {
+            refreshEmailStatus()
         }
     }
 
     private fun loadUserData() {
-        val sharedPref = getSharedPreferences("user_prefs", MODE_PRIVATE)
-        val userEmail = sharedPref.getString("user_email", "")
+        val currentUser = auth.currentUser ?: return
 
-        if (!userEmail.isNullOrEmpty()) {
-            // Show loading state
-            tvUserEmail.text = "Loading..."
-            tvUserName.text = "Loading..."
-            tvNumber.text = "Loading..."
+        val displayName = currentUser.displayName?.takeIf { it.isNotBlank() } ?: currentUser.email?.substringBefore("@") ?: "User"
+        val email = currentUser.email ?: ""
 
-            fetchUserDataFromDatabase(userEmail)
-        } else {
-            // No user logged in, show default data
-            showDefaultData()
-        }
-    }
+        tvAvatarInitial.text = displayName.first().uppercase()
+        tvUserName.text = displayName
+        tvUserEmail.text = email
 
-    private fun fetchUserDataFromDatabase(userEmail: String) {
-        // ✅ FIXED: Use FirebaseConfig instead of direct FirebaseDatabase
         val database = FirebaseConfig.getDatabaseReference()
-        val usersRef = database.child("users")
-
-        usersRef.orderByChild("email").equalTo(userEmail)
-            .addListenerForSingleValueEvent(object: ValueEventListener {
-                override fun onDataChange(dataSnapshot: DataSnapshot) {
-                    if(dataSnapshot.exists()) {
-                        for (userSnapshot in dataSnapshot.children) {
-                            val user = userSnapshot.getValue(User::class.java)
-                            if (user != null) {
-                                // Update UI with real user data
-                                updateUIWithUserData(user)
-                                updateSharedPreference(user)
-                                return
-                            }
-                        }
+        database.child("users").child(currentUser.uid)
+            .addListenerForSingleValueEvent(object : ValueEventListener {
+                override fun onDataChange(snapshot: DataSnapshot) {
+                    val user = snapshot.getValue(User::class.java)
+                    if (user != null) {
+                        tvUserFullName.text = user.fullName.ifBlank { displayName }
+                        tvUserEmailDetail.text = user.email.ifBlank { email }
+                        tvUserNumber.text = user.number.ifBlank { "N/A" }
+                        tvUserName.text = user.fullName.ifBlank { displayName }
+                        tvAvatarInitial.text = (user.fullName.firstOrNull()
+                            ?: displayName.first()).uppercase()
+                    } else {
+                        tvUserFullName.text = displayName
+                        tvUserEmailDetail.text = email
+                        tvUserNumber.text = "N/A"
                     }
-                    // If not found, show default data
-                    showDefaultData()
                 }
 
-                override fun onCancelled(databaseError: DatabaseError) {
-                    // Silent fail - load from SharedPreferences
-                    loadFromSharedPreferences()
+                override fun onCancelled(error: DatabaseError) {
+                    tvUserFullName.text = displayName
+                    tvUserEmailDetail.text = email
+                    tvUserNumber.text = "N/A"
                 }
             })
+
+        updateEmailVerificationUI()
     }
 
-    private fun updateUIWithUserData(user: User) {
-        tvUserName.text = user.fullName
-        tvUserEmail.text = user.email
-        tvNumber.text = user.number
-    }
+    private fun updateEmailVerificationUI() {
+        val isVerified = auth.currentUser?.emailVerified ?: false
 
-    private fun updateSharedPreference(user: User) {
-        val sharedPref = getSharedPreferences("user_prefs", MODE_PRIVATE)
-        with(sharedPref.edit()) {
-            putString("user_name", user.fullName)
-            putString("user_email", user.email)
-            putString("user_number", user.number)
-            apply()
+        if (isVerified) {
+            verifiedBanner.visibility = View.VISIBLE
+            unverifiedBanner.visibility = View.GONE
+        } else {
+            verifiedBanner.visibility = View.GONE
+            unverifiedBanner.visibility = View.VISIBLE
         }
     }
 
-    private fun loadFromSharedPreferences() {
-        val sharedPref = getSharedPreferences("user_prefs", MODE_PRIVATE)
-        val userName = sharedPref.getString("user_name", "Juan A. Tamad")
-        val userEmail = sharedPref.getString("user_email", "juantamad@gmail.com")
-        val userNumber = sharedPref.getString("user_number", "09277263218")
+    private fun resendVerificationEmail() {
+        val user = auth.currentUser ?: return
+        btnResendVerification.isEnabled = false
+        btnResendVerification.text = "Sending..."
 
-        tvUserName.text = userName
-        tvUserEmail.text = userEmail
-        tvNumber.text = userNumber
-    }
-
-    private fun showDefaultData() {
-        tvUserName.text = "Juan A. Tamad"
-        tvUserEmail.text = "juantamad@gmail.com"
-        tvNumber.text = "09277263218"
-    }
-
-    private fun showLogoutConfirmation() {
-        android.app.AlertDialog.Builder(this)
-            .setTitle("Log Out")
-            .setMessage("Are you sure you want to log out?")
-            .setPositiveButton("Yes") { dialog, _ ->
-                performLogout()
-                dialog.dismiss()
+        user.sendEmailVerification()
+            .addOnCompleteListener { task ->
+                btnResendVerification.isEnabled = true
+                btnResendVerification.text = "Resend verification email"
+                if (task.isSuccessful) {
+                    Toast.makeText(this, "Verification email sent!", Toast.LENGTH_SHORT).show()
+                } else {
+                    Toast.makeText(this, "Failed to send. Try again later.", Toast.LENGTH_SHORT).show()
+                }
             }
-            .setNegativeButton("No") { dialog, _ ->
-                dialog.dismiss()
-            }
-            .show()
     }
 
-    private fun performLogout() {
-        // Clear user data
-        val sharedPref = getSharedPreferences("user_prefs", MODE_PRIVATE)
-        sharedPref.edit().clear().apply()
+    private fun refreshEmailStatus() {
+        val user = auth.currentUser ?: return
+        btnRefreshStatus.isEnabled = false
+        btnRefreshStatus.text = "Refreshing..."
 
-        // Back to MainActivity
-        val intent = Intent(this, MainActivity::class.java)
-        intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
-        startActivity(intent)
-        finish()
+        user.reload().addOnCompleteListener { task ->
+            btnRefreshStatus.isEnabled = true
+            btnRefreshStatus.text = "Refresh status"
+            if (task.isSuccessful) {
+                updateEmailVerificationUI()
+                if (auth.currentUser?.emailVerified == true) {
+                    Toast.makeText(this, "Email verified!", Toast.LENGTH_SHORT).show()
+                } else {
+                    Toast.makeText(this, "Email not yet verified.", Toast.LENGTH_SHORT).show()
+                }
+            } else {
+                Toast.makeText(this, "Failed to refresh status.", Toast.LENGTH_SHORT).show()
+            }
+        }
     }
 
     override fun onResume() {
         super.onResume()
-        // Refresh data when returning from EditProfileActivity
-        refreshUserData()
+        loadUserData()
     }
 
-    private fun refreshUserData() {
-        // Refresh user data from SharedPreferences
-        val sharedPref = getSharedPreferences("user_prefs", MODE_PRIVATE)
-        val userName = sharedPref.getString("user_name", "Juan A. Tamad")
-        val userEmail = sharedPref.getString("user_email", "juanatamad@gmail.com")
-        val userNumber = sharedPref.getString("user_number", "09277263218")
-
-        tvUserName.text = userName
-        tvUserEmail.text = userEmail
-        tvNumber.text = userNumber
+    private fun showLogoutConfirmation() {
+        AlertDialog.Builder(this)
+            .setTitle("Log Out")
+            .setMessage("Are you sure you want to log out?")
+            .setPositiveButton("Yes") { dialog, _ ->
+                auth.signOut()
+                val sharedPref = getSharedPreferences("user_prefs", MODE_PRIVATE)
+                sharedPref.edit().clear().apply()
+                val intent = Intent(this, MainActivity::class.java)
+                intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+                startActivity(intent)
+                finish()
+                dialog.dismiss()
+            }
+            .setNegativeButton("No") { dialog, _ -> dialog.dismiss() }
+            .show()
     }
 
     private fun setupBottomNavigation() {
@@ -195,22 +221,17 @@ class ProfileActivity : AppCompatActivity() {
         val navOrders = findViewById<LinearLayout>(R.id.navOrder)
         val navProfile = findViewById<LinearLayout>(R.id.navProfile)
 
-        // Set Profile as active
         setActiveTab(navProfile)
+
         navMap.setOnClickListener {
-            val intent = Intent(this, MapActivity::class.java)
-            startActivity(intent)
-            finish()
+            startActivity(Intent(this, MapActivity::class.java))
         }
 
         navOrders.setOnClickListener {
-            val intent = Intent(this, OrdersActivity::class.java)
-            startActivity(intent)
-            finish()
+            startActivity(Intent(this, OrdersActivity::class.java))
         }
 
         navProfile.setOnClickListener {
-            // Already on profile page, just refresh if needed
             setActiveTab(navProfile)
         }
     }
@@ -231,12 +252,13 @@ class ProfileActivity : AppCompatActivity() {
             }
 
             if (tab == activeTab) {
-                textView?.setTextColor(Color.parseColor("#2196F3"))
-                tab.background = ContextCompat.getDrawable(this, R.drawable.tab_active_border)
+                textView?.setTextColor(Color.WHITE)
+                textView?.alpha = 1.0f
             } else {
-                textView?.setTextColor(Color.parseColor("#757575"))
-                tab.background = ContextCompat.getDrawable(this, R.drawable.tab_border_highlight)
+                textView?.setTextColor(ContextCompat.getColor(this, R.color.light_yellow))
+                textView?.alpha = 0.6f
             }
+            tab.background = null
         }
     }
 }

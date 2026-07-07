@@ -4,6 +4,7 @@ import android.annotation.SuppressLint
 import android.content.Intent
 import android.os.Bundle
 import android.util.Log
+import android.view.View
 import android.widget.*
 import androidx.appcompat.app.AppCompatActivity
 import com.google.firebase.auth.FirebaseAuth
@@ -13,36 +14,49 @@ import java.util.*
 
 class OrderConfirmationActivity : AppCompatActivity() {
 
-    private var transactionFee: Double = 10.0
+    private var transactionFee: Double = 0.0
 
-    private lateinit var tvWaterStationName: TextView
+    // Receipt header
+    private lateinit var tvStationName: TextView
+    private lateinit var tvReferenceNumber: TextView
+    private lateinit var tvOrderTypeBadge: TextView
+
+    // Customer details
     private lateinit var tvCustomerName: TextView
+    private lateinit var tvCustomerPhone: TextView
     private lateinit var tvOrderDate: TextView
     private lateinit var tvOrderTime: TextView
-    private lateinit var tvOrderType: TextView
     private lateinit var tvDeliveryAddress: TextView
+    private lateinit var tvAdditionalDetails: TextView
+    private lateinit var layoutAddress: LinearLayout
+    private lateinit var layoutNotes: LinearLayout
 
-    // Order Items
-    private lateinit var tvPureWaterDetails: TextView
-    private lateinit var tvSpringWaterDetails: TextView
-    private lateinit var tvMineralWaterDetails: TextView
+    // Order items
+    private lateinit var layoutPureWater: LinearLayout
+    private lateinit var tvPureWaterName: TextView
+    private lateinit var tvPureWaterQty: TextView
+    private lateinit var tvPureWaterAmount: TextView
+    private lateinit var layoutSpringWater: LinearLayout
+    private lateinit var tvSpringWaterName: TextView
+    private lateinit var tvSpringWaterQty: TextView
+    private lateinit var tvSpringWaterAmount: TextView
+    private lateinit var layoutMineralWater: LinearLayout
+    private lateinit var tvMineralWaterName: TextView
+    private lateinit var tvMineralWaterQty: TextView
+    private lateinit var tvMineralWaterAmount: TextView
 
     // Summary
     private lateinit var tvSubtotal: TextView
     private lateinit var tvDeliveryFee: TextView
     private lateinit var tvTransactionFee: TextView
     private lateinit var tvGrandTotal: TextView
-    private lateinit var tvReferenceNumber: TextView
-    private lateinit var tvAdditionalDetails: TextView
-    private lateinit var tvPaymentMethod: TextView
-
-    // Layout wrappers
     private lateinit var layoutDeliveryFee: LinearLayout
     private lateinit var layoutTransactionFee: LinearLayout
 
     // Buttons
     private lateinit var btnConfirmOrder: Button
     private lateinit var btnEditOrder: Button
+    private lateinit var btnBack: ImageButton
 
     // Data
     private var currentStation: WaterStation? = null
@@ -51,12 +65,12 @@ class OrderConfirmationActivity : AppCompatActivity() {
     private var orderTime: String = ""
     private var orderType: String = ""
     private var userAddress: String = ""
-    private var manualAddress: String = ""  // NEW: Store manual address separately
+    private var manualAddress: String = ""
     private var userLatitude: Double = 0.0
     private var userLongitude: Double = 0.0
     private var additionalDetails: String = ""
     private var referenceNumber: String = ""
-    private var customerPhone: String = ""  // Received directly from CreateOrderActivity
+    private var customerPhone: String = ""
 
     // Firebase
     private lateinit var auth: FirebaseAuth
@@ -90,92 +104,102 @@ class OrderConfirmationActivity : AppCompatActivity() {
             orderTime = intent.getStringExtra("ORDER_TIME") ?: ""
             orderType = intent.getStringExtra("ORDER_TYPE") ?: ""
             userAddress = intent.getStringExtra("USER_ADDRESS") ?: ""
-            manualAddress = intent.getStringExtra("MANUAL_ADDRESS") ?: ""  // NEW: Get manual address
+            manualAddress = intent.getStringExtra("MANUAL_ADDRESS") ?: ""
             userLatitude = intent.getDoubleExtra("USER_LATITUDE", 0.0)
             userLongitude = intent.getDoubleExtra("USER_LONGITUDE", 0.0)
             additionalDetails = intent.getStringExtra("ADDITIONAL_DETAILS") ?: ""
-            customerPhone = intent.getStringExtra("CONTACT_NUMBER") ?: ""  // NEW - from intent
+            customerPhone = intent.getStringExtra("CONTACT_NUMBER") ?: ""
+            transactionFee = orderTotal.transactionFee
         } catch (e: Exception) {
             Toast.makeText(this, "Error: ${e.message}", Toast.LENGTH_LONG).show()
         }
     }
 
     private fun initializeViews() {
-        tvWaterStationName = findViewById(R.id.tvWaterStationName)
+        tvStationName = findViewById(R.id.tvStationName)
+        tvReferenceNumber = findViewById(R.id.tvReferenceNumber)
+        tvOrderTypeBadge = findViewById(R.id.tvOrderTypeBadge)
+
         tvCustomerName = findViewById(R.id.tvCustomerName)
+        tvCustomerPhone = findViewById(R.id.tvCustomerPhone)
         tvOrderDate = findViewById(R.id.tvOrderDate)
         tvOrderTime = findViewById(R.id.tvOrderTime)
-        tvOrderType = findViewById(R.id.tvOrderType)
         tvDeliveryAddress = findViewById(R.id.tvDeliveryAddress)
+        tvAdditionalDetails = findViewById(R.id.tvAdditionalDetails)
+        layoutAddress = findViewById(R.id.layoutAddress)
+        layoutNotes = findViewById(R.id.layoutNotes)
 
-        tvPureWaterDetails = findViewById(R.id.tvPureWaterDetails)
-        tvSpringWaterDetails = findViewById(R.id.tvSpringWaterDetails)
-        tvMineralWaterDetails = findViewById(R.id.tvMineralWaterDetails)
+        layoutPureWater = findViewById(R.id.layoutPureWater)
+        tvPureWaterName = findViewById(R.id.tvPureWaterName)
+        tvPureWaterQty = findViewById(R.id.tvPureWaterQty)
+        tvPureWaterAmount = findViewById(R.id.tvPureWaterAmount)
+        layoutSpringWater = findViewById(R.id.layoutSpringWater)
+        tvSpringWaterName = findViewById(R.id.tvSpringWaterName)
+        tvSpringWaterQty = findViewById(R.id.tvSpringWaterQty)
+        tvSpringWaterAmount = findViewById(R.id.tvSpringWaterAmount)
+        layoutMineralWater = findViewById(R.id.layoutMineralWater)
+        tvMineralWaterName = findViewById(R.id.tvMineralWaterName)
+        tvMineralWaterQty = findViewById(R.id.tvMineralWaterQty)
+        tvMineralWaterAmount = findViewById(R.id.tvMineralWaterAmount)
 
         tvSubtotal = findViewById(R.id.tvSubtotal)
         tvDeliveryFee = findViewById(R.id.tvDeliveryFee)
         tvTransactionFee = findViewById(R.id.tvTransactionFee)
         tvGrandTotal = findViewById(R.id.tvGrandTotal)
-        tvReferenceNumber = findViewById(R.id.tvReferenceNumber)
-        tvAdditionalDetails = findViewById(R.id.tvAdditionalDetails)
-        tvPaymentMethod = findViewById(R.id.tvPaymentMethod)
-
         layoutDeliveryFee = findViewById(R.id.layoutDeliveryFee)
         layoutTransactionFee = findViewById(R.id.layoutTransactionFee)
 
         btnConfirmOrder = findViewById(R.id.btnConfirmOrder)
         btnEditOrder = findViewById(R.id.btnEditOrder)
+        btnBack = findViewById(R.id.btnBack)
     }
 
     private fun setupClickListeners() {
-        btnConfirmOrder.setOnClickListener {
-            saveOrderToFirebase()  // generateReferenceNumber is now called inside saveOrderToFirebase
-        }
+        btnConfirmOrder.setOnClickListener { saveOrderToFirebase() }
 
-        btnEditOrder.setOnClickListener {
-            finish()
-        }
+        btnEditOrder.setOnClickListener { finish() }
+
+        btnBack.setOnClickListener { finish() }
     }
 
     @SuppressLint("SetTextI18n", "DefaultLocale")
     private fun displayOrderDetails() {
         try {
-            tvWaterStationName.text = currentStation?.stationName ?: "Water Station"
+            tvStationName.text = currentStation?.stationName ?: "Water Station"
+            tvReferenceNumber.text = "Generating..."
+            tvOrderTypeBadge.text = orderType
+
             val currentUser = auth.currentUser
             val customerName = currentUser?.displayName ?: "Customer"
-            tvCustomerName.text = "Name: $customerName"
+            tvCustomerName.text = customerName
+            tvCustomerPhone.text = customerPhone
 
-            tvOrderDate.text = "Date: $orderDate"
-            tvOrderTime.text = "Time: $orderTime"
-            tvOrderType.text = "Type: $orderType"
+            tvOrderDate.text = orderDate
+            tvOrderTime.text = if (orderTime.isNotEmpty()) formatTime(orderTime) else orderTime
 
-            // MODIFIED: Show manual address if available, otherwise use coordinates but hide coordinates
             if (orderType == "Delivery") {
-                val displayAddress = if (manualAddress.isNotEmpty()) {
-                    manualAddress  // Show the manually entered address
-                } else if (userAddress.isNotEmpty() && !userAddress.contains("Lat:")) {
-                    userAddress  // Show address if it's not just coordinates
-                } else {
-                    "Address will be provided during delivery"  // Default message when only coordinates exist
+                val displayAddress = when {
+                    manualAddress.isNotEmpty() -> manualAddress
+                    userAddress.isNotEmpty() && !userAddress.contains("Lat:") -> userAddress
+                    else -> "Address will be provided during delivery"
                 }
-
-                tvDeliveryAddress.text = "Address: $displayAddress"
-                tvDeliveryAddress.visibility = android.view.View.VISIBLE
+                tvDeliveryAddress.text = displayAddress
+                layoutAddress.visibility = View.VISIBLE
             } else {
-                tvDeliveryAddress.visibility = android.view.View.GONE
+                layoutAddress.visibility = View.GONE
             }
 
             displayOrderItems()
 
             tvSubtotal.text = "₱${String.format("%.2f", orderTotal.waterSubtotal)}"
             tvTransactionFee.text = "₱${String.format("%.2f", transactionFee)}"
-            layoutTransactionFee.visibility = android.view.View.VISIBLE
+            layoutTransactionFee.visibility = View.VISIBLE
 
             if (orderTotal.deliveryFee > 0 && orderType == "Delivery") {
                 tvDeliveryFee.text = "₱${String.format("%.2f", orderTotal.deliveryFee)}"
-                layoutDeliveryFee.visibility = android.view.View.VISIBLE
+                layoutDeliveryFee.visibility = View.VISIBLE
             } else {
-                layoutDeliveryFee.visibility = android.view.View.GONE
+                layoutDeliveryFee.visibility = View.GONE
             }
 
             val grandTotal = orderTotal.waterSubtotal +
@@ -183,49 +207,71 @@ class OrderConfirmationActivity : AppCompatActivity() {
                     transactionFee
             tvGrandTotal.text = "₱${String.format("%.2f", grandTotal)}"
 
-            // Reference number placeholder until Firebase transaction returns
-            tvReferenceNumber.text = "Generating..."
-
             if (additionalDetails.isNotEmpty()) {
-                tvAdditionalDetails.text = "Notes: $additionalDetails"
-                tvAdditionalDetails.visibility = android.view.View.VISIBLE
+                tvAdditionalDetails.text = additionalDetails
+                layoutNotes.visibility = View.VISIBLE
             } else {
-                tvAdditionalDetails.visibility = android.view.View.GONE
+                layoutNotes.visibility = View.GONE
             }
-
-            tvPaymentMethod.text = "Payment: Cash on Delivery"
 
         } catch (e: Exception) {
             Toast.makeText(this, "Error: ${e.message}", Toast.LENGTH_LONG).show()
         }
     }
 
-    @SuppressLint("SetTextI18n", "DefaultLocale")
+    @SuppressLint("DefaultLocale")
     private fun displayOrderItems() {
         if (orderTotal.pureWaterQty > 0) {
-            tvPureWaterDetails.text =
-                "${orderTotal.pureWaterQty} gallon(s) Pure Water: ₱${String.format("%.2f", orderTotal.pureWaterTotal)}"
-            tvPureWaterDetails.visibility = android.view.View.VISIBLE
-        } else tvPureWaterDetails.visibility = android.view.View.GONE
+            tvPureWaterName.text = "Pure Water"
+            tvPureWaterQty.text = orderTotal.pureWaterQty.toString()
+            tvPureWaterAmount.text = "₱${String.format("%.2f", orderTotal.pureWaterTotal)}"
+            layoutPureWater.visibility = View.VISIBLE
+        } else {
+            layoutPureWater.visibility = View.GONE
+        }
 
         if (orderTotal.springWaterQty > 0) {
-            tvSpringWaterDetails.text =
-                "${orderTotal.springWaterQty} liter(s) Spring Water: ₱${String.format("%.2f", orderTotal.springWaterTotal)}"
-            tvSpringWaterDetails.visibility = android.view.View.VISIBLE
-        } else tvSpringWaterDetails.visibility = android.view.View.GONE
+            tvSpringWaterName.text = "Spring Water"
+            tvSpringWaterQty.text = orderTotal.springWaterQty.toString()
+            tvSpringWaterAmount.text = "₱${String.format("%.2f", orderTotal.springWaterTotal)}"
+            layoutSpringWater.visibility = View.VISIBLE
+        } else {
+            layoutSpringWater.visibility = View.GONE
+        }
 
         if (orderTotal.mineralWaterQty > 0) {
-            tvMineralWaterDetails.text =
-                "${orderTotal.mineralWaterQty} gallon(s) Mineral Water: ₱${String.format("%.2f", orderTotal.mineralWaterTotal)}"
-            tvMineralWaterDetails.visibility = android.view.View.VISIBLE
-        } else tvMineralWaterDetails.visibility = android.view.View.GONE
+            tvMineralWaterName.text = "Mineral Water"
+            tvMineralWaterQty.text = orderTotal.mineralWaterQty.toString()
+            tvMineralWaterAmount.text = "₱${String.format("%.2f", orderTotal.mineralWaterTotal)}"
+            layoutMineralWater.visibility = View.VISIBLE
+        } else {
+            layoutMineralWater.visibility = View.GONE
+        }
+    }
+
+    private fun formatTime(time: String): String {
+        return try {
+            val parts = time.split(":")
+            if (parts.size == 2) {
+                val hour = parts[0].toInt()
+                val minute = parts[1].toInt()
+                val amPm = if (hour < 12) "AM" else "PM"
+                val displayHour = when {
+                    hour == 0 -> 12
+                    hour > 12 -> hour - 12
+                    else -> hour
+                }
+                String.format("%d:%02d %s", displayHour, minute, amPm)
+            } else time
+        } catch (e: Exception) {
+            time
+        }
     }
 
     private fun generateReferenceNumber(callback: (String) -> Unit) {
         val dateStr = SimpleDateFormat("yyyyMMdd", Locale.getDefault()).format(Date())
         val counterRef = database.reference.child("orderCounter").child(dateStr)
 
-        // Get station name prefix (first 3 letters, uppercase, letters only)
         val stationPrefix = currentStation?.stationName
             ?.filter { it.isLetter() }
             ?.take(3)
@@ -258,7 +304,7 @@ class OrderConfirmationActivity : AppCompatActivity() {
         })
     }
 
-    private fun createOrderObject(customerId: String, orderId: String, customerPhone: String): Order {
+    private fun createOrderObject(customerId: String, orderId: String): Order {
         val currentUser = auth.currentUser
         val customerName = currentUser?.displayName ?: "Customer"
 
@@ -266,7 +312,6 @@ class OrderConfirmationActivity : AppCompatActivity() {
                 (if (orderType == "Delivery") orderTotal.deliveryFee else 0.0) +
                 transactionFee
 
-        // MODIFIED: Use manual address if available for display, otherwise use coordinates for backend
         val displayAddress = if (manualAddress.isNotEmpty()) {
             manualAddress
         } else {
@@ -296,7 +341,7 @@ class OrderConfirmationActivity : AppCompatActivity() {
             deliveryFee = if (orderType == "Delivery") orderTotal.deliveryFee else 0.0,
             transactionFee = transactionFee,
             grandTotal = grandTotal,
-            locationDetails = displayAddress,  // Store the user-friendly address
+            locationDetails = displayAddress,
             deliveryAddress = if (orderType == "Delivery") displayAddress else "",
             deliveryLatitude = if (orderType == "Delivery") userLatitude else 0.0,
             deliveryLongitude = if (orderType == "Delivery") userLongitude else 0.0,
@@ -320,12 +365,11 @@ class OrderConfirmationActivity : AppCompatActivity() {
         btnConfirmOrder.text = "Processing..."
 
         try {
-            // Generate orderId using the new format (e.g., AQU-20260427-0042)
             generateReferenceNumber { orderId ->
                 referenceNumber = orderId
+                tvReferenceNumber.text = "Ref: $referenceNumber"
 
-                // Use the generated orderId as the Firebase key
-                val order = createOrderObject(currentUser.uid, orderId, customerPhone)
+                val order = createOrderObject(currentUser.uid, orderId)
 
                 database.reference.child("orders").child(orderId)
                     .setValue(order)

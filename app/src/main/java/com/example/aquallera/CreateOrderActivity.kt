@@ -1,14 +1,17 @@
 package com.example.aquallera
 
 import android.app.DatePickerDialog
-import android.app.TimePickerDialog
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.graphics.Color
 import android.location.Location
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.text.Editable
 import android.text.TextWatcher
 import android.util.Log
+import android.view.View
 import android.widget.*
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
@@ -16,6 +19,12 @@ import com.google.android.gms.location.FusedLocationProviderClient
 import com.google.android.gms.location.LocationServices
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.database.*
+import org.json.JSONArray
+import org.json.JSONObject
+import java.io.BufferedReader
+import java.io.InputStreamReader
+import java.net.HttpURLConnection
+import java.net.URL
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -24,16 +33,15 @@ class CreateOrderActivity : AppCompatActivity() {
     // UI Elements
     private lateinit var tvWaterStationName: TextView
     private lateinit var tvSelectedDate: TextView
-    private lateinit var tvSelectedTime: TextView
-    private lateinit var calendarView: CalendarView
-    private lateinit var rgOrderType: RadioGroup
-    private lateinit var rbDelivery: RadioButton
-    private lateinit var rbPickup: RadioButton
+    private lateinit var btnDelivery: Button
+    private lateinit var btnPickup: Button
     private lateinit var btnGetLocation: Button
-    private lateinit var etManualAddress: EditText
+    private lateinit var etAddressSearch: EditText
     private lateinit var etAdditionalDetails: EditText
-    private lateinit var etContactNumber: EditText
+    private lateinit var btnPreviewOrder: Button
+    private lateinit var btnEditOrder: Button
     private lateinit var btnProceed: Button
+    private lateinit var btnBack: ImageButton
 
     // Water quantity inputs
     private lateinit var etGallonPure: EditText
@@ -44,7 +52,6 @@ class CreateOrderActivity : AppCompatActivity() {
     private lateinit var tvPureWaterPrice: TextView
     private lateinit var tvSpringWaterPrice: TextView
     private lateinit var tvMineralWaterPrice: TextView
-    private lateinit var tvDeliveryFee: TextView
 
     // Quantity control buttons
     private lateinit var btnIncreaseGallonPure: Button
@@ -54,6 +61,42 @@ class CreateOrderActivity : AppCompatActivity() {
     private lateinit var btnIncreaseGallonMineral: Button
     private lateinit var btnDecreaseGallonMineral: Button
 
+    // Preview elements
+    private lateinit var previewContent: ScrollView
+    private lateinit var formContent: ScrollView
+    private lateinit var bottomActions: LinearLayout
+    private lateinit var tvPreviewStation: TextView
+    private lateinit var tvPreviewPure: TextView
+    private lateinit var tvPreviewSpring: TextView
+    private lateinit var tvPreviewMineral: TextView
+    private lateinit var tvPreviewOrderType: TextView
+    private lateinit var previewAddressCard: LinearLayout
+    private lateinit var tvPreviewAddress: TextView
+    private lateinit var tvPreviewDate: TextView
+    private lateinit var tvPreviewTime: TextView
+    private lateinit var previewInstructionsCard: LinearLayout
+    private lateinit var tvPreviewInstructions: TextView
+    private lateinit var tvPreviewSubtotal: TextView
+    private lateinit var previewDeliveryFeeRow: LinearLayout
+    private lateinit var tvPreviewDeliveryFee: TextView
+    private lateinit var tvPreviewTransactionFee: TextView
+    private lateinit var tvPreviewGrandTotal: TextView
+
+    // Email warning
+    private lateinit var emailWarningCard: LinearLayout
+    private lateinit var btnResendVerification: TextView
+
+    // Address autocomplete
+    private lateinit var suggestionsContainer: LinearLayout
+    private lateinit var btnClearAddress: ImageButton
+    private lateinit var tvSelectedAddress: TextView
+    private lateinit var tvSearchStatus: TextView
+    private lateinit var addressCard: LinearLayout
+
+    // Time slots
+    private lateinit var timeSlotsCard: LinearLayout
+    private lateinit var timeSlotsContainer: LinearLayout
+
     // Data
     private var currentStation: WaterStation? = null
     private var selectedDate: String = ""
@@ -62,19 +105,28 @@ class CreateOrderActivity : AppCompatActivity() {
     private var userLongitude: Double = 0.0
     private var userAddress: String = ""
     private var manualAddress: String = ""
-    private var isLocationDetected: Boolean = false  // NEW: Track if GPS location was detected
+    private var isLocationDetected: Boolean = false
+    private var isDelivery: Boolean = true
 
     // Prices from station
     private var pureWaterPrice: Double = 0.0
     private var springWaterPrice: Double = 0.0
     private var mineralWaterPrice: Double = 0.0
     private var deliveryFee: Double = 0.0
+    private val transactionFeeRate = 0.02
 
     // Location
     private lateinit var fusedLocationClient: FusedLocationProviderClient
 
     // Firebase Auth
     private lateinit var auth: FirebaseAuth
+    private var emailVerified: Boolean = true
+    private var verifSending: Boolean = false
+
+    // Address autocomplete
+    private val suggestions = mutableListOf<Pair<String, String>>()
+    private val searchHandler = Handler(Looper.getMainLooper())
+    private var searchRunnable: Runnable? = null
 
     // Order Limiter
     private val MAX_WATER_QUANTITY = 50
@@ -83,64 +135,119 @@ class CreateOrderActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_create_order)
 
-        // Initialize location client
         fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
-
-        // Initialize Firebase Auth
         auth = FirebaseAuth.getInstance()
 
-        // Get station data from intent
         currentStation = intent.getSerializableExtra("WATER_STATION") as? WaterStation
 
         initializeViews()
         setupClickListeners()
         setupQuantityControls()
-        setupDateAndTime()
+        setupDateSelection()
         loadStationPrices()
         updateWaterStationName()
-        setupBottomNavigation()
-        updateLocationFieldsVisibility()
-
-        // Pre-fill contact number from user's profile
+        checkEmailVerification()
         prefillContactNumber()
+        updateDeliveryUi()
     }
 
     private fun initializeViews() {
-        // Basic views
         tvWaterStationName = findViewById(R.id.tvWaterStationName)
         tvSelectedDate = findViewById(R.id.tvSelectedDate)
-        tvSelectedTime = findViewById(R.id.tvSelectedTime)
-        calendarView = findViewById(R.id.calendarView)
-        rgOrderType = findViewById(R.id.rgOrderType)
-        rbDelivery = findViewById(R.id.rbDelivery)
-        rbPickup = findViewById(R.id.rbPickup)
-        btnGetLocation = findViewById(R.id.getLocation)
-        etManualAddress = findViewById(R.id.etManualAddress)
+        btnDelivery = findViewById(R.id.btnDelivery)
+        btnPickup = findViewById(R.id.btnPickup)
+        btnGetLocation = findViewById(R.id.btnGetLocation)
+        etAddressSearch = findViewById(R.id.etAddressSearch)
         etAdditionalDetails = findViewById(R.id.additionalDetailsInput)
-        etContactNumber = findViewById(R.id.etContactNumber)
-        btnProceed = findViewById(R.id.proceedButton)
+        btnPreviewOrder = findViewById(R.id.btnPreviewOrder)
+        btnEditOrder = findViewById(R.id.btnEditOrder)
+        btnProceed = findViewById(R.id.btnProceed)
+        btnBack = findViewById(R.id.btnBack)
 
-        // Water quantity inputs
         etGallonPure = findViewById(R.id.etGallonPure)
         etLiterSpring = findViewById(R.id.etLiterSpring)
         etGallonMineral = findViewById(R.id.etGallonMineral)
 
-        // Price displays
         tvPureWaterPrice = findViewById(R.id.tvPureWaterPrice)
         tvSpringWaterPrice = findViewById(R.id.tvSpringWaterPrice)
         tvMineralWaterPrice = findViewById(R.id.tvMineralWaterPrice)
-        tvDeliveryFee = findViewById(R.id.tvDeliveryFee)
 
-        // Quantity control buttons
         btnIncreaseGallonPure = findViewById(R.id.btnIncreaseGallonPure)
         btnDecreaseGallonPure = findViewById(R.id.btnDecreaseGallonPure)
         btnIncreaseLiterSpring = findViewById(R.id.btnIncreaseLiterSpring)
         btnDecreaseLiterSpring = findViewById(R.id.btnDecreaseLiterSpring)
         btnIncreaseGallonMineral = findViewById(R.id.btnIncreaseGallonMineral)
         btnDecreaseGallonMineral = findViewById(R.id.btnDecreaseGallonMineral)
+
+        formContent = findViewById(R.id.formContent)
+        previewContent = findViewById(R.id.previewContent)
+        bottomActions = findViewById(R.id.bottomActions)
+        tvPreviewStation = findViewById(R.id.tvPreviewStation)
+        tvPreviewPure = findViewById(R.id.tvPreviewPure)
+        tvPreviewSpring = findViewById(R.id.tvPreviewSpring)
+        tvPreviewMineral = findViewById(R.id.tvPreviewMineral)
+        tvPreviewOrderType = findViewById(R.id.tvPreviewOrderType)
+        previewAddressCard = findViewById(R.id.previewAddressCard)
+        tvPreviewAddress = findViewById(R.id.tvPreviewAddress)
+        tvPreviewDate = findViewById(R.id.tvPreviewDate)
+        tvPreviewTime = findViewById(R.id.tvPreviewTime)
+        previewInstructionsCard = findViewById(R.id.previewInstructionsCard)
+        tvPreviewInstructions = findViewById(R.id.tvPreviewInstructions)
+        tvPreviewSubtotal = findViewById(R.id.tvPreviewSubtotal)
+        previewDeliveryFeeRow = findViewById(R.id.previewDeliveryFeeRow)
+        tvPreviewDeliveryFee = findViewById(R.id.tvPreviewDeliveryFee)
+        tvPreviewTransactionFee = findViewById(R.id.tvPreviewTransactionFee)
+        tvPreviewGrandTotal = findViewById(R.id.tvPreviewGrandTotal)
+
+        emailWarningCard = findViewById(R.id.emailWarningCard)
+        btnResendVerification = findViewById(R.id.btnResendVerification)
+
+        suggestionsContainer = findViewById(R.id.suggestionsContainer)
+        btnClearAddress = findViewById(R.id.btnClearAddress)
+        tvSelectedAddress = findViewById(R.id.tvSelectedAddress)
+        tvSearchStatus = findViewById(R.id.tvSearchStatus)
+        addressCard = findViewById(R.id.addressCard)
+
+        timeSlotsCard = findViewById(R.id.timeSlotsCard)
+        timeSlotsContainer = findViewById(R.id.timeSlotsContainer)
     }
 
-    // Pre-fill contact number from Firebase user profile
+    // -------------------------------------------------------------------------
+    // Email Verification
+    // -------------------------------------------------------------------------
+
+    private fun checkEmailVerification() {
+        val user = auth.currentUser
+        if (user != null) {
+            user.reload().addOnCompleteListener {
+                emailVerified = user.isEmailVerified
+                emailWarningCard.visibility = if (emailVerified) View.GONE else View.VISIBLE
+                updatePreviewButtonState()
+            }
+        }
+    }
+
+    private fun handleResendVerification() {
+        if (verifSending) return
+        verifSending = true
+        btnResendVerification.text = "Sending..."
+
+        auth.currentUser?.sendEmailVerification()
+            ?.addOnCompleteListener { task ->
+                verifSending = false
+                btnResendVerification.text = "Resend verification email"
+                if (task.isSuccessful) {
+                    Toast.makeText(this, "Verification email sent", Toast.LENGTH_SHORT).show()
+                } else {
+                    Toast.makeText(this, "Failed to send: ${task.exception?.message}", Toast.LENGTH_SHORT).show()
+                }
+            }
+    }
+
+    // -------------------------------------------------------------------------
+    // Prefill
+    // -------------------------------------------------------------------------
+
     private fun prefillContactNumber() {
         val userId = auth.currentUser?.uid ?: return
         val database = FirebaseDatabase.getInstance("https://aquallera-default-rtdb.asia-southeast1.firebasedatabase.app")
@@ -154,15 +261,17 @@ class CreateOrderActivity : AppCompatActivity() {
                         snapshot.hasChild("contactNumber") -> snapshot.child("contactNumber").getValue(String::class.java)
                         else -> null
                     }
-                    if (!number.isNullOrEmpty()) {
-                        etContactNumber.setText(number)
-                    }
+                    // No contact number input in new layout — phone is saved with order
                 }
                 override fun onCancelled(error: DatabaseError) {
                     Log.e("CreateOrder", "Failed to fetch user number: ${error.message}")
                 }
             })
     }
+
+    // -------------------------------------------------------------------------
+    // Station / Prices
+    // -------------------------------------------------------------------------
 
     private fun loadStationPrices() {
         currentStation?.let { station ->
@@ -171,11 +280,9 @@ class CreateOrderActivity : AppCompatActivity() {
             mineralWaterPrice = station.pricing_gallon_mineral ?: 0.0
             deliveryFee = station.pricing_delivery_fee ?: 0.0
 
-            tvPureWaterPrice.text = "Price: ₱${String.format("%.2f", pureWaterPrice)}/gallon"
-            tvSpringWaterPrice.text = "Price: ₱${String.format("%.2f", springWaterPrice)}/liter"
-            tvMineralWaterPrice.text = "Price: ₱${String.format("%.2f", mineralWaterPrice)}/gallon"
-
-            updateDeliveryFeeVisibility()
+            tvPureWaterPrice.text = "₱${String.format("%.2f", pureWaterPrice)} / gallon"
+            tvSpringWaterPrice.text = "₱${String.format("%.2f", springWaterPrice)} / liter"
+            tvMineralWaterPrice.text = "₱${String.format("%.2f", mineralWaterPrice)} / gallon"
         }
     }
 
@@ -185,19 +292,46 @@ class CreateOrderActivity : AppCompatActivity() {
         }
     }
 
-    private fun setupDateAndTime() {
+    // -------------------------------------------------------------------------
+    // Order Type Toggle
+    // -------------------------------------------------------------------------
+
+    private fun updateDeliveryUi() {
+        if (isDelivery) {
+            btnDelivery.background = ContextCompat.getDrawable(this, R.drawable.toggle_btn_active)
+            btnDelivery.setTextColor(Color.WHITE)
+            btnPickup.background = ContextCompat.getDrawable(this, R.drawable.toggle_btn_inactive)
+            btnPickup.setTextColor(Color.parseColor("#666666"))
+            addressCard.visibility = View.VISIBLE
+            if (selectedDate.isNotEmpty() && currentStation?.deliveryHours?.isNotEmpty() == true) {
+                timeSlotsCard.visibility = View.VISIBLE
+                updateTimeSlots()
+            } else {
+                timeSlotsCard.visibility = View.GONE
+            }
+        } else {
+            btnPickup.background = ContextCompat.getDrawable(this, R.drawable.toggle_btn_active)
+            btnPickup.setTextColor(Color.WHITE)
+            btnDelivery.background = ContextCompat.getDrawable(this, R.drawable.toggle_btn_inactive)
+            btnDelivery.setTextColor(Color.parseColor("#666666"))
+            addressCard.visibility = View.GONE
+            timeSlotsCard.visibility = View.GONE
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // Date Selection
+    // -------------------------------------------------------------------------
+
+    private fun setupDateSelection() {
         val calendar = Calendar.getInstance()
         val dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale.getDefault())
         selectedDate = dateFormat.format(calendar.time)
         tvSelectedDate.text = selectedDate
 
-        calendar.add(Calendar.MINUTE, 1)
-        val timeFormat = SimpleDateFormat("hh:mm a", Locale.getDefault())
-        selectedTime = timeFormat.format(calendar.time)
-        tvSelectedTime.text = selectedTime
-
-        tvSelectedDate.setOnClickListener {
-            showDatePickerDialog()
+        tvSelectedDate.setOnClickListener { showDatePickerDialog() }
+        if (currentStation?.deliveryHours?.isNotEmpty() == true) {
+            updateTimeSlots()
         }
     }
 
@@ -207,179 +341,385 @@ class CreateOrderActivity : AppCompatActivity() {
         val month = calendar.get(Calendar.MONTH)
         val day = calendar.get(Calendar.DAY_OF_MONTH)
 
-        val datePickerDialog = DatePickerDialog(
+        DatePickerDialog(
             this,
             { _, selectedYear, selectedMonth, selectedDay ->
-                val selectedCalendar = Calendar.getInstance()
-                selectedCalendar.set(selectedYear, selectedMonth, selectedDay)
-                selectedCalendar.set(Calendar.HOUR_OF_DAY, 0)
-                selectedCalendar.set(Calendar.MINUTE, 0)
-                selectedCalendar.set(Calendar.SECOND, 0)
-                selectedCalendar.set(Calendar.MILLISECOND, 0)
-
-                val todayCalendar = Calendar.getInstance()
-                todayCalendar.set(Calendar.HOUR_OF_DAY, 0)
-                todayCalendar.set(Calendar.MINUTE, 0)
-                todayCalendar.set(Calendar.SECOND, 0)
-                todayCalendar.set(Calendar.MILLISECOND, 0)
-
+                val cal = Calendar.getInstance()
+                cal.set(selectedYear, selectedMonth, selectedDay)
                 val dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale.getDefault())
-                selectedDate = dateFormat.format(selectedCalendar.time)
+                selectedDate = dateFormat.format(cal.time)
                 tvSelectedDate.text = selectedDate
-
-                if (selectedCalendar.timeInMillis == todayCalendar.timeInMillis) {
-                    validateSelectedTimeAgainstCurrentTime()
-                } else {
-                    val defaultTime = Calendar.getInstance()
-                    defaultTime.set(Calendar.HOUR_OF_DAY, 9)
-                    defaultTime.set(Calendar.MINUTE, 0)
-                    val timeFormat = SimpleDateFormat("hh:mm a", Locale.getDefault())
-                    selectedTime = timeFormat.format(defaultTime.time)
-                    tvSelectedTime.text = selectedTime
-                }
+                selectedTime = ""
+                updateTimeSlots()
             },
-            year,
-            month,
-            day
-        )
-
-        datePickerDialog.datePicker.minDate = calendar.timeInMillis
-        datePickerDialog.show()
+            year, month, day
+        ).apply {
+            datePicker.minDate = System.currentTimeMillis()
+            show()
+        }
     }
 
-    private fun validateSelectedTimeAgainstCurrentTime() {
-        val currentTime = Calendar.getInstance()
-        val selectedTimeCalendar = Calendar.getInstance()
+    // -------------------------------------------------------------------------
+    // Time Slots
+    // -------------------------------------------------------------------------
 
-        val timeFormat = SimpleDateFormat("hh:mm a", Locale.getDefault())
-        try {
-            selectedTimeCalendar.time = timeFormat.parse(selectedTime) ?: return
+    private fun updateTimeSlots() {
+        timeSlotsContainer.removeAllViews()
+        val hours = currentStation?.deliveryHours ?: emptyList()
+        if (hours.isEmpty() || !isDelivery) {
+            timeSlotsCard.visibility = View.GONE
+            return
+        }
+        timeSlotsCard.visibility = View.VISIBLE
 
-            val today = Calendar.getInstance()
-            selectedTimeCalendar.set(Calendar.YEAR, today.get(Calendar.YEAR))
-            selectedTimeCalendar.set(Calendar.MONTH, today.get(Calendar.MONTH))
-            selectedTimeCalendar.set(Calendar.DAY_OF_MONTH, today.get(Calendar.DAY_OF_MONTH))
+        var currentRow: LinearLayout? = null
+        var countInRow = 0
 
-            if (selectedTimeCalendar.timeInMillis <= currentTime.timeInMillis) {
-                val suggestionHour = currentTime.get(Calendar.HOUR_OF_DAY)
-                var suggestionMinute = currentTime.get(Calendar.MINUTE) + 1
-
-                if (suggestionMinute >= 60) {
-                    suggestionMinute = 59
+        hours.forEachIndexed { index, time ->
+            if (countInRow == 0) {
+                currentRow = LinearLayout(this).apply {
+                    orientation = LinearLayout.HORIZONTAL
+                    layoutParams = LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.MATCH_PARENT,
+                        LinearLayout.LayoutParams.WRAP_CONTENT
+                    )
                 }
-
-                val amPm = if (suggestionHour < 12) "AM" else "PM"
-                val displayHour = if (suggestionHour > 12) suggestionHour - 12 else if (suggestionHour == 0) 12 else suggestionHour
-                selectedTime = String.format("%02d:%02d %s", displayHour, suggestionMinute, amPm)
-                tvSelectedTime.text = selectedTime
-
-                Toast.makeText(this, "Time updated to current time + 1 minute", Toast.LENGTH_SHORT).show()
             }
-        } catch (e: Exception) {
-            e.printStackTrace()
+
+            val btn = Button(this)
+            val displayTime = formatTimeSlot(time)
+            btn.text = displayTime
+            btn.textSize = 12f
+            btn.setTypeface(btn.typeface, android.graphics.Typeface.BOLD)
+            btn.minWidth = 0
+            btn.minHeight = 0
+            btn.setPadding(16, 10, 16, 10)
+            btn.layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                36.dpToPx()
+            ).apply {
+                setMargins(0, 0, 8.dpToPx(), 8.dpToPx())
+            }
+            btn.setBackgroundResource(R.drawable.toggle_btn_inactive)
+            btn.setTextColor(Color.parseColor("#666666"))
+
+            btn.setOnClickListener {
+                selectedTime = time
+                updateTimeSlotSelection()
+            }
+
+            currentRow?.addView(btn)
+            countInRow++
+
+            if (countInRow >= 3 || index == hours.size - 1) {
+                currentRow?.let { timeSlotsContainer.addView(it) }
+                countInRow = 0
+            }
+        }
+
+        if (selectedTime.isNotEmpty()) {
+            updateTimeSlotSelection()
         }
     }
 
-    fun showTimePicker(view: android.view.View) {
-        val calendar = Calendar.getInstance()
-        val currentHour = calendar.get(Calendar.HOUR_OF_DAY)
-        val currentMinute = calendar.get(Calendar.MINUTE)
-
-        val selectedDateCalendar = Calendar.getInstance()
-        val dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale.getDefault())
-        try {
-            selectedDateCalendar.time = dateFormat.parse(selectedDate) ?: Calendar.getInstance().time
-        } catch (e: Exception) {
-            selectedDateCalendar.time = Calendar.getInstance().time
+    private fun updateTimeSlotSelection() {
+        for (i in 0 until timeSlotsContainer.childCount) {
+            val row = timeSlotsContainer.getChildAt(i) as? LinearLayout ?: continue
+            for (j in 0 until row.childCount) {
+                val btn = row.getChildAt(j) as? Button ?: continue
+                val displayTime = btn.text.toString()
+                if (displayTime == formatTimeSlot(selectedTime)) {
+                    btn.setBackgroundResource(R.drawable.toggle_btn_active)
+                    btn.setTextColor(Color.WHITE)
+                } else {
+                    btn.setBackgroundResource(R.drawable.toggle_btn_inactive)
+                    btn.setTextColor(Color.parseColor("#666666"))
+                }
+            }
         }
+    }
 
-        val timePickerDialog = TimePickerDialog(
-            this,
-            TimePickerDialog.OnTimeSetListener { _, selectedHour, selectedMinute ->
-                val today = Calendar.getInstance()
-                val isToday = selectedDateCalendar.get(Calendar.YEAR) == today.get(Calendar.YEAR) &&
-                        selectedDateCalendar.get(Calendar.DAY_OF_YEAR) == today.get(Calendar.DAY_OF_YEAR)
+    private fun formatTimeSlot(time: String): String {
+        return try {
+            val parts = time.split(":")
+            if (parts.size == 2) {
+                val hour = parts[0].toInt()
+                val minute = parts[1].toInt()
+                val amPm = if (hour < 12) "AM" else "PM"
+                val displayHour = when {
+                    hour == 0 -> 12
+                    hour > 12 -> hour - 12
+                    else -> hour
+                }
+                String.format("%d:%02d %s", displayHour, minute, amPm)
+            } else time
+        } catch (e: Exception) {
+            time
+        }
+    }
 
-                if (isToday) {
-                    if (selectedHour < currentHour ||
-                        (selectedHour == currentHour && selectedMinute <= currentMinute)) {
+    // -------------------------------------------------------------------------
+    // Address Autocomplete
+    // -------------------------------------------------------------------------
 
-                        Toast.makeText(
-                            this,
-                            "Cannot select a time in the past. Please select a future time.",
-                            Toast.LENGTH_LONG
-                        ).show()
+    private fun setupAddressAutocomplete() {
+        etAddressSearch.addTextChangedListener(object : TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
+            override fun afterTextChanged(s: Editable?) {
+                val query = s?.toString()?.trim() ?: ""
+                btnClearAddress.visibility = if (query.isNotEmpty()) View.VISIBLE else View.GONE
 
-                        val suggestionHour = currentHour
-                        val suggestionMinute = currentMinute + 1
-
-                        if (suggestionMinute >= 60) {
-                            val newHour = suggestionHour + 1
-                            val newMinute = suggestionMinute - 60
-                            if (newHour < 24) {
-                                val amPm = if (newHour < 12) "AM" else "PM"
-                                val displayHour = if (newHour > 12) newHour - 12 else if (newHour == 0) 12 else newHour
-                                selectedTime = String.format("%02d:%02d %s", displayHour, newMinute, amPm)
-                                tvSelectedTime.text = selectedTime
-                                Toast.makeText(this, "Time set to ${String.format("%02d:%02d", displayHour, newMinute)} $amPm", Toast.LENGTH_SHORT).show()
-                            }
-                        } else {
-                            val amPm = if (suggestionHour < 12) "AM" else "PM"
-                            val displayHour = if (suggestionHour > 12) suggestionHour - 12 else if (suggestionHour == 0) 12 else suggestionHour
-                            selectedTime = String.format("%02d:%02d %s", displayHour, suggestionMinute, amPm)
-                            tvSelectedTime.text = selectedTime
-                            Toast.makeText(this, "Time set to ${String.format("%02d:%02d", displayHour, suggestionMinute)} $amPm", Toast.LENGTH_SHORT).show()
-                        }
-                        return@OnTimeSetListener
-                    }
+                searchRunnable?.let { searchHandler.removeCallbacks(it) }
+                if (query.length < 3) {
+                    suggestionsContainer.removeAllViews()
+                    suggestionsContainer.visibility = View.GONE
+                    return
                 }
 
-                val amPm = if (selectedHour < 12) "AM" else "PM"
-                val displayHour = if (selectedHour > 12) selectedHour - 12 else if (selectedHour == 0) 12 else selectedHour
-                selectedTime = String.format("%02d:%02d %s", displayHour, selectedMinute, amPm)
-                tvSelectedTime.text = selectedTime
-            },
-            calendar.get(Calendar.HOUR_OF_DAY),
-            calendar.get(Calendar.MINUTE),
-            false
-        )
+                searchRunnable = Runnable { searchAddress(query) }
+                searchHandler.postDelayed(searchRunnable!!, 400)
+            }
+        })
 
-        timePickerDialog.show()
+        btnClearAddress.setOnClickListener {
+            etAddressSearch.setText("")
+            userAddress = ""
+            tvSelectedAddress.visibility = View.GONE
+        }
     }
+
+    private fun searchAddress(query: String) {
+        val token = getString(R.string.mapbox_access_token)
+        val encodedQuery = java.net.URLEncoder.encode(query, "UTF-8")
+        val urlStr = "https://api.mapbox.com/geocoding/v5/mapbox.places/$encodedQuery.json" +
+                "?access_token=$token&country=PH&types=address,place,poi,locality,neighborhood,district" +
+                "&language=en&limit=8&autocomplete=true&fuzzyMatch=true"
+
+        Thread {
+            try {
+                val url = URL(urlStr)
+                val conn = url.openConnection() as HttpURLConnection
+                conn.connectTimeout = 5000
+                conn.readTimeout = 5000
+                val reader = BufferedReader(InputStreamReader(conn.inputStream))
+                val response = reader.readText()
+                reader.close()
+
+                val json = JSONObject(response)
+                val features = json.getJSONArray("features")
+                val results = mutableListOf<Pair<String, String>>()
+
+                for (i in 0 until features.length()) {
+                    val feature = features.getJSONObject(i)
+                    val placeName = feature.getString("place_name")
+                    val text = feature.getString("text")
+                    results.add(Pair(text, placeName))
+                }
+
+                runOnUiThread { showSuggestions(results) }
+            } catch (e: Exception) {
+                runOnUiThread {
+                    tvSearchStatus.text = "Search failed"
+                    tvSearchStatus.visibility = View.VISIBLE
+                }
+            }
+        }.start()
+    }
+
+    private fun showSuggestions(results: List<Pair<String, String>>) {
+        suggestionsContainer.removeAllViews()
+        suggestions.clear()
+        suggestions.addAll(results)
+
+        if (results.isEmpty()) {
+            suggestionsContainer.visibility = View.GONE
+            return
+        }
+
+        suggestionsContainer.visibility = View.VISIBLE
+        results.forEachIndexed { index, (text, placeName) ->
+            val item = LinearLayout(this)
+            item.orientation = LinearLayout.HORIZONTAL
+            item.gravity = android.view.Gravity.CENTER_VERTICAL
+            item.setPadding(12, 10, 12, 10)
+            item.layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            )
+            if (index < results.size - 1) {
+                item.setBackgroundColor(Color.parseColor("#FFFFFF"))
+                val divider = View(this)
+                divider.layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT, 1
+                )
+                divider.setBackgroundColor(Color.parseColor("#F0F0F0"))
+                suggestionsContainer.addView(divider)
+            }
+
+            val icon = TextView(this)
+            icon.text = "📍"
+            icon.textSize = 14f
+            icon.layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply { setMargins(0, 0, 8, 0) }
+
+            val textContainer = LinearLayout(this)
+            textContainer.orientation = LinearLayout.VERTICAL
+            textContainer.layoutParams = LinearLayout.LayoutParams(
+                0,
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                1f
+            )
+
+            val title = TextView(this)
+            title.text = text
+            title.textSize = 12f
+            title.setTextColor(Color.parseColor("#333333"))
+            title.maxLines = 1
+            title.ellipsize = android.text.TextUtils.TruncateAt.END
+
+            val subtitle = TextView(this)
+            subtitle.text = placeName
+            subtitle.textSize = 10f
+            subtitle.setTextColor(Color.parseColor("#999999"))
+            subtitle.maxLines = 1
+            subtitle.ellipsize = android.text.TextUtils.TruncateAt.END
+
+            textContainer.addView(title)
+            textContainer.addView(subtitle)
+
+            item.addView(icon)
+            item.addView(textContainer)
+            item.setOnClickListener {
+                selectAddress(placeName)
+            }
+
+            suggestionsContainer.addView(item)
+        }
+    }
+
+    private fun selectAddress(placeName: String) {
+        etAddressSearch.setText(placeName)
+        userAddress = placeName
+        tvSelectedAddress.text = placeName
+        tvSelectedAddress.visibility = View.VISIBLE
+        suggestionsContainer.removeAllViews()
+        suggestionsContainer.visibility = View.GONE
+    }
+
+    // -------------------------------------------------------------------------
+    // Click Listeners
+    // -------------------------------------------------------------------------
 
     private fun setupClickListeners() {
-        rgOrderType.setOnCheckedChangeListener { _, _ ->
-            updateDeliveryFeeVisibility()
-            updateLocationFieldsVisibility()
+        btnBack.setOnClickListener { finish() }
+
+        btnDelivery.setOnClickListener {
+            isDelivery = true
+            updateDeliveryUi()
+            if (selectedDate.isNotEmpty()) updateTimeSlots()
         }
 
-        btnGetLocation.setOnClickListener {
-            getCurrentLocation()
+        btnPickup.setOnClickListener {
+            isDelivery = false
+            updateDeliveryUi()
         }
 
-        btnProceed.setOnClickListener {
+        btnGetLocation.setOnClickListener { getCurrentLocation() }
+
+        btnPreviewOrder.setOnClickListener {
             if (validateOrder()) {
-                navigateToOrderConfirmation()
+                showPreview()
             }
         }
+
+        btnEditOrder.setOnClickListener { hidePreview() }
+
+        btnProceed.setOnClickListener { navigateToOrderConfirmation() }
+
+        btnResendVerification.setOnClickListener { handleResendVerification() }
+
+        setupAddressAutocomplete()
     }
 
-    private fun updateLocationFieldsVisibility() {
-        val isDelivery = rbDelivery.isChecked
-        val visibility = if (isDelivery) android.view.View.VISIBLE else android.view.View.GONE
+    // -------------------------------------------------------------------------
+    // Location
+    // -------------------------------------------------------------------------
 
-        btnGetLocation.visibility = visibility
-        etManualAddress.visibility = visibility
-        findViewById<TextView>(R.id.cbUseCoordinatesForDelivery).visibility = visibility
+    private fun getCurrentLocation() {
+        if (ContextCompat.checkSelfPermission(
+                this, android.Manifest.permission.ACCESS_FINE_LOCATION
+            ) != PackageManager.PERMISSION_GRANTED
+        ) {
+            Toast.makeText(this, "Location permission not granted", Toast.LENGTH_SHORT).show()
+            return
+        }
 
-        if (!isDelivery) {
-            userLatitude = 0.0
-            userLongitude = 0.0
-            userAddress = ""
-            manualAddress = ""
+        try {
+            tvSearchStatus.text = "Getting location..."
+            tvSearchStatus.visibility = View.VISIBLE
+
+            fusedLocationClient.lastLocation
+                .addOnSuccessListener { location: Location? ->
+                    location?.let {
+                        userLatitude = it.latitude
+                        userLongitude = it.longitude
+                        isLocationDetected = true
+                        reverseGeocode(it.latitude, it.longitude)
+                        Toast.makeText(this, "✅ Location detected!", Toast.LENGTH_SHORT).show()
+                    } ?: run {
+                        isLocationDetected = false
+                        tvSearchStatus.text = "Unable to get location. Enable GPS."
+                        Toast.makeText(this, "Unable to get location", Toast.LENGTH_LONG).show()
+                    }
+                }
+                .addOnFailureListener {
+                    isLocationDetected = false
+                    tvSearchStatus.text = "Failed: ${it.message}"
+                }
+        } catch (e: SecurityException) {
             isLocationDetected = false
+            tvSearchStatus.text = "Permission required"
         }
     }
+
+    private fun reverseGeocode(lat: Double, lng: Double) {
+        val token = getString(R.string.mapbox_access_token)
+        val urlStr = "https://api.mapbox.com/geocoding/v5/mapbox.places/$lng,$lat.json" +
+                "?access_token=$token&country=PH&types=address,place,locality&language=en"
+
+        Thread {
+            try {
+                val url = URL(urlStr)
+                val conn = url.openConnection() as HttpURLConnection
+                conn.connectTimeout = 5000
+                conn.readTimeout = 5000
+                val reader = BufferedReader(InputStreamReader(conn.inputStream))
+                val response = reader.readText()
+                reader.close()
+
+                val json = JSONObject(response)
+                val features = json.getJSONArray("features")
+                if (features.length() > 0) {
+                    val placeName = features.getJSONObject(0).getString("place_name")
+                    runOnUiThread {
+                        selectAddress(placeName)
+                        tvSearchStatus.text = "Location detected"
+                    }
+                }
+            } catch (e: Exception) {
+                runOnUiThread {
+                    tvSearchStatus.text = "Reverse geocode failed"
+                }
+            }
+        }.start()
+    }
+
+    // -------------------------------------------------------------------------
+    // Quantity Controls
+    // -------------------------------------------------------------------------
 
     private fun setupQuantityControls() {
         btnIncreaseGallonPure.setOnClickListener {
@@ -433,11 +773,7 @@ class CreateOrderActivity : AppCompatActivity() {
                             value > MAX_WATER_QUANTITY -> {
                                 editText.setText(MAX_WATER_QUANTITY.toString())
                                 editText.setSelection(MAX_WATER_QUANTITY.toString().length)
-                                Toast.makeText(
-                                    editText.context,
-                                    "Maximum quantity is $MAX_WATER_QUANTITY",
-                                    Toast.LENGTH_SHORT
-                                ).show()
+                                Toast.makeText(editText.context, "Maximum quantity is $MAX_WATER_QUANTITY", Toast.LENGTH_SHORT).show()
                             }
                         }
                     }
@@ -446,68 +782,65 @@ class CreateOrderActivity : AppCompatActivity() {
         })
     }
 
-    private fun updateDeliveryFeeVisibility() {
-        if (rbDelivery.isChecked && deliveryFee > 0) {
-            tvDeliveryFee.text = "Delivery Fee: ₱${String.format("%.2f", deliveryFee)}"
-            tvDeliveryFee.visibility = android.view.View.VISIBLE
+    // -------------------------------------------------------------------------
+    // Preview Toggle
+    // -------------------------------------------------------------------------
+
+    private fun showPreview() {
+        val total = calculateOrderTotal()
+
+        tvPreviewStation.text = "Station: ${currentStation?.stationName ?: ""}"
+        tvPreviewPure.text = if (total.pureWaterQty > 0) "pure water — ${total.pureWaterQty} gallon(s) at ₱${String.format("%.2f", total.pureWaterPrice)} each" else ""
+        tvPreviewSpring.text = if (total.springWaterQty > 0) "spring water — ${total.springWaterQty} liter(s) at ₱${String.format("%.2f", total.springWaterPrice)} each" else ""
+        tvPreviewMineral.text = if (total.mineralWaterQty > 0) "mineral water — ${total.mineralWaterQty} gallon(s) at ₱${String.format("%.2f", total.mineralWaterPrice)} each" else ""
+        tvPreviewOrderType.text = if (isDelivery) "Delivery" else "Pickup"
+
+        if (isDelivery && userAddress.isNotEmpty()) {
+            previewAddressCard.visibility = View.VISIBLE
+            tvPreviewAddress.text = userAddress
         } else {
-            tvDeliveryFee.visibility = android.view.View.GONE
+            previewAddressCard.visibility = View.GONE
         }
+
+        tvPreviewDate.text = "Date: $selectedDate"
+        tvPreviewTime.text = if (selectedTime.isNotEmpty()) "Time: ${formatTimeSlot(selectedTime)}" else "Time: Not set"
+
+        val instructions = etAdditionalDetails.text.toString().trim()
+        if (instructions.isNotEmpty()) {
+            previewInstructionsCard.visibility = View.VISIBLE
+            tvPreviewInstructions.text = instructions
+        } else {
+            previewInstructionsCard.visibility = View.GONE
+        }
+
+        tvPreviewSubtotal.text = "₱${String.format("%.2f", total.waterSubtotal)}"
+
+        if (isDelivery && total.deliveryFee > 0) {
+            previewDeliveryFeeRow.visibility = View.VISIBLE
+            tvPreviewDeliveryFee.text = "₱${String.format("%.2f", total.deliveryFee)}"
+        } else {
+            previewDeliveryFeeRow.visibility = View.GONE
+        }
+
+        tvPreviewTransactionFee.text = "₱${String.format("%.2f", total.transactionFee)}"
+        tvPreviewGrandTotal.text = "₱${String.format("%.2f", total.grandTotal)}"
+
+        formContent.visibility = View.GONE
+        previewContent.visibility = View.VISIBLE
+        btnPreviewOrder.visibility = View.GONE
+        bottomActions.visibility = View.VISIBLE
     }
 
-    private fun getCurrentLocation() {
-        if (!rbDelivery.isChecked) {
-            Toast.makeText(this, "Location is only needed for delivery orders", Toast.LENGTH_SHORT).show()
-            return
-        }
-
-        try {
-            fusedLocationClient.lastLocation
-                .addOnSuccessListener { location: Location? ->
-                    location?.let {
-                        userLatitude = it.latitude
-                        userLongitude = it.longitude
-                        isLocationDetected = true  // Mark that location was successfully detected
-
-                        // Store coordinates in userAddress for validation
-                        userAddress = "Lat: ${String.format("%.6f", userLatitude)}, Lng: ${String.format("%.6f", userLongitude)}"
-
-                        // Simple success message
-                        Toast.makeText(this, "✅ Location detected successfully!", Toast.LENGTH_SHORT).show()
-
-                        if (rbDelivery.isChecked) {
-                            checkDeliveryRange()
-                        }
-                    } ?: run {
-                        isLocationDetected = false
-                        Toast.makeText(this, "Unable to get location. Please enable GPS and try again, or enter address manually.", Toast.LENGTH_LONG).show()
-                    }
-                }
-                .addOnFailureListener {
-                    isLocationDetected = false
-                    Toast.makeText(this, "Failed to get location: ${it.message}. Please enter address manually.", Toast.LENGTH_SHORT).show()
-                }
-        } catch (e: SecurityException) {
-            isLocationDetected = false
-            Toast.makeText(this, "Location permission required. Please enable in settings or enter address manually.", Toast.LENGTH_LONG).show()
-        }
+    private fun hidePreview() {
+        formContent.visibility = View.VISIBLE
+        previewContent.visibility = View.GONE
+        btnPreviewOrder.visibility = View.VISIBLE
+        bottomActions.visibility = View.GONE
     }
 
-    private fun checkDeliveryRange() {
-        currentStation?.let { station ->
-            if (station.latitude != 0.0 && station.longitude != 0.0 && userLatitude != 0.0 && userLongitude != 0.0) {
-                val isWithinRange = station.isWithinDeliveryRange(userLatitude, userLongitude)
-                if (!isWithinRange) {
-                    Toast.makeText(this,
-                        "⚠️ You are outside the delivery range (${station.deliveryRadius}km). " +
-                                "You may still place an order but delivery might take longer or incur additional fees.",
-                        Toast.LENGTH_LONG).show()
-                } else {
-                    Toast.makeText(this, "✅ You are within delivery range!", Toast.LENGTH_SHORT).show()
-                }
-            }
-        }
-    }
+    // -------------------------------------------------------------------------
+    // Order Total Calculation
+    // -------------------------------------------------------------------------
 
     private fun calculateOrderTotal(): OrderTotal {
         val pureWaterQty = etGallonPure.text.toString().toIntOrNull() ?: 0
@@ -519,12 +852,9 @@ class CreateOrderActivity : AppCompatActivity() {
         val mineralWaterTotal = mineralWaterQty * mineralWaterPrice
 
         val waterSubtotal = pureWaterTotal + springWaterTotal + mineralWaterTotal
-
-        val totalDeliveryFee = if (rbDelivery.isChecked) deliveryFee else 0.0
-        val grandTotal = waterSubtotal + totalDeliveryFee
-
-        Log.d("ORDER_DEBUG", "Station ID: ${currentStation?.id}")
-        Log.d("ORDER_DEBUG", "Station Name: ${currentStation?.stationName}")
+        val totalDeliveryFee = if (isDelivery) deliveryFee else 0.0
+        val transactionFee = (waterSubtotal + totalDeliveryFee) * transactionFeeRate
+        val grandTotal = waterSubtotal + totalDeliveryFee + transactionFee
 
         return OrderTotal(
             pureWaterQty = pureWaterQty,
@@ -538,11 +868,21 @@ class CreateOrderActivity : AppCompatActivity() {
             mineralWaterTotal = mineralWaterTotal,
             waterSubtotal = waterSubtotal,
             deliveryFee = totalDeliveryFee,
+            transactionFee = transactionFee,
             grandTotal = grandTotal
         )
     }
 
+    // -------------------------------------------------------------------------
+    // Validation
+    // -------------------------------------------------------------------------
+
     private fun validateOrder(): Boolean {
+        if (!emailVerified) {
+            Toast.makeText(this, "Please verify your email to place orders", Toast.LENGTH_LONG).show()
+            return false
+        }
+
         val pureWaterQty = etGallonPure.text.toString().toIntOrNull() ?: 0
         val springWaterQty = etLiterSpring.text.toString().toIntOrNull() ?: 0
         val mineralWaterQty = etGallonMineral.text.toString().toIntOrNull() ?: 0
@@ -552,188 +892,69 @@ class CreateOrderActivity : AppCompatActivity() {
             return false
         }
 
-        if (!validateOrderDateTime()) {
+        if (selectedDate.isEmpty()) {
+            Toast.makeText(this, "Please select a preferred date", Toast.LENGTH_SHORT).show()
             return false
         }
 
-        // Validate contact number
-        val contactNumber = etContactNumber.text.toString().trim()
-        if (contactNumber.isEmpty()) {
-            Toast.makeText(this, "Please enter a contact number.", Toast.LENGTH_SHORT).show()
-            return false
-        }
-        if (contactNumber.length != 11) {
-            Toast.makeText(this, "Please enter a valid 11-digit contact number.", Toast.LENGTH_SHORT).show()
+        if (isDelivery && currentStation?.deliveryHours?.isNotEmpty() == true && selectedTime.isEmpty()) {
+            Toast.makeText(this, "Please select a delivery time slot", Toast.LENGTH_SHORT).show()
             return false
         }
 
-        if (rbDelivery.isChecked) {
-            manualAddress = etManualAddress.text.toString().trim()
-
-            val hasGpsLocation = isLocationDetected && userLatitude != 0.0 && userLongitude != 0.0
+        if (isDelivery) {
+            manualAddress = etAddressSearch.text.toString().trim()
             val hasManualAddress = manualAddress.isNotEmpty()
 
-            // STRICT VALIDATION: Must have either GPS location OR manual address
-            if (!hasGpsLocation && !hasManualAddress) {
+            if (!hasManualAddress && userAddress.isEmpty()) {
                 Toast.makeText(this,
-                    "❌ Delivery address is required!\n\nPlease either:\n• Tap 'Get Location' to use your GPS location, OR\n• Enter your complete address manually in the field above",
+                    "Delivery address is required.\nPlease type your address or tap 📍 for GPS.",
                     Toast.LENGTH_LONG).show()
                 return false
-            }
-
-            // If only GPS is used (no manual address), show error and require manual address
-            if (hasGpsLocation && !hasManualAddress) {
-                Toast.makeText(this,
-                    "❌ Please enter your complete address manually.\n\nGPS coordinates alone are not sufficient for delivery. Please provide your full address (House number, street, barangay, city, province).",
-                    Toast.LENGTH_LONG).show()
-                // Focus on the manual address field
-                etManualAddress.requestFocus()
-                return false
-            }
-
-            // If only manual address is entered, that's acceptable
-            if (!hasGpsLocation && hasManualAddress) {
-                // This is fine - proceed
-                Log.d("CreateOrder", "Using manual address only")
-            }
-
-            // If both are available, use manual address (already set)
-            if (hasGpsLocation && hasManualAddress) {
-                Log.d("CreateOrder", "Both GPS and manual address available, using manual address")
-            }
-
-            // Check delivery range if GPS is available
-            if (hasGpsLocation) {
-                currentStation?.let { station ->
-                    if (!station.isWithinDeliveryRange(userLatitude, userLongitude)) {
-                        Toast.makeText(this,
-                            "⚠️ You are outside the delivery range (${station.deliveryRadius}km). " +
-                                    "Please select pickup or choose another station.",
-                            Toast.LENGTH_LONG).show()
-                        return false
-                    }
-                }
             }
         }
 
         return true
     }
 
-    private fun validateOrderDateTime(): Boolean {
-        val now = Calendar.getInstance()
-
-        val selectedDateCalendar = Calendar.getInstance()
-        val dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale.getDefault())
-
-        try {
-            selectedDateCalendar.time = dateFormat.parse(selectedDate) ?: return false
-        } catch (e: Exception) {
-            Toast.makeText(this, "Invalid date selected", Toast.LENGTH_SHORT).show()
-            return false
-        }
-
-        val selectedDateTimeCalendar = Calendar.getInstance()
-        val timeFormat = SimpleDateFormat("hh:mm a", Locale.getDefault())
-
-        try {
-            selectedDateTimeCalendar.time = timeFormat.parse(selectedTime) ?: return false
-
-            selectedDateTimeCalendar.set(
-                selectedDateCalendar.get(Calendar.YEAR),
-                selectedDateCalendar.get(Calendar.MONTH),
-                selectedDateCalendar.get(Calendar.DAY_OF_MONTH),
-                selectedDateTimeCalendar.get(Calendar.HOUR_OF_DAY),
-                selectedDateTimeCalendar.get(Calendar.MINUTE)
-            )
-        } catch (e: Exception) {
-            Toast.makeText(this, "Invalid time selected", Toast.LENGTH_SHORT).show()
-            return false
-        }
-
-        if (selectedDateTimeCalendar.timeInMillis <= now.timeInMillis) {
-            Toast.makeText(
-                this,
-                "Cannot place order for a past date or time. Please select a future time.",
-                Toast.LENGTH_LONG
-            ).show()
-            return false
-        }
-
-        return true
+    private fun updatePreviewButtonState() {
+        btnPreviewOrder.isEnabled = emailVerified
+        btnPreviewOrder.alpha = if (emailVerified) 1.0f else 0.5f
     }
+
+    // -------------------------------------------------------------------------
+    // Navigation
+    // -------------------------------------------------------------------------
 
     private fun navigateToOrderConfirmation() {
         val orderTotal = calculateOrderTotal()
-        manualAddress = etManualAddress.text.toString().trim()
+        manualAddress = etAddressSearch.text.toString().trim()
+        if (manualAddress.isNotEmpty()) userAddress = manualAddress
+
+        val contactNumber = auth.currentUser?.phoneNumber ?: ""
 
         val intent = Intent(this, OrderConfirmationActivity::class.java)
         intent.putExtra("WATER_STATION", currentStation)
         intent.putExtra("ORDER_DATE", selectedDate)
         intent.putExtra("ORDER_TIME", selectedTime)
-        intent.putExtra("ORDER_TYPE", if (rbDelivery.isChecked) "Delivery" else "Pickup")
+        intent.putExtra("ORDER_TYPE", if (isDelivery) "Delivery" else "Pickup")
         intent.putExtra("USER_LATITUDE", userLatitude)
         intent.putExtra("USER_LONGITUDE", userLongitude)
         intent.putExtra("USER_ADDRESS", userAddress)
         intent.putExtra("MANUAL_ADDRESS", manualAddress)
         intent.putExtra("ADDITIONAL_DETAILS", etAdditionalDetails.text.toString())
         intent.putExtra("ORDER_TOTAL", orderTotal)
-        intent.putExtra("CONTACT_NUMBER", etContactNumber.text.toString().trim())
-
+        intent.putExtra("CONTACT_NUMBER", contactNumber)
         intent.putExtra("PURE_WATER_QTY", orderTotal.pureWaterQty)
         intent.putExtra("SPRING_WATER_QTY", orderTotal.springWaterQty)
         intent.putExtra("MINERAL_WATER_QTY", orderTotal.mineralWaterQty)
-
         startActivity(intent)
     }
 
-    private fun setupBottomNavigation() {
-        val navMap = findViewById<LinearLayout>(R.id.navMap)
-        val navOrders = findViewById<LinearLayout>(R.id.navOrder)
-        val navProfile = findViewById<LinearLayout>(R.id.navProfile)
+    // -------------------------------------------------------------------------
+    // Data class
+    // -------------------------------------------------------------------------
 
-        setActiveTab(navMap)
-        navMap.setOnClickListener {
-            val intent = Intent(this, MapActivity::class.java)
-            startActivity(intent)
-        }
-        navOrders.setOnClickListener {
-            val intent = Intent(this, OrdersActivity::class.java)
-            startActivity(intent)
-            finish()
-        }
-        navProfile.setOnClickListener {
-            val intent = Intent(this, ProfileActivity::class.java)
-            startActivity(intent)
-            finish()
-        }
-    }
-
-    private fun setActiveTab(activeTab: LinearLayout) {
-        val allTabs = listOf(
-            findViewById<LinearLayout>(R.id.navMap),
-            findViewById<LinearLayout>(R.id.navOrder),
-            findViewById<LinearLayout>(R.id.navProfile)
-        )
-
-        allTabs.forEach { tab ->
-            val textView = when (tab.id) {
-                R.id.navMap -> findViewById<TextView>(R.id.tvMap)
-                R.id.navOrder -> findViewById<TextView>(R.id.tvOrder)
-                R.id.navProfile -> findViewById<TextView>(R.id.tvProfile)
-                else -> null
-            }
-
-            if (tab == activeTab) {
-                textView?.setTextColor(Color.parseColor("#2196F3"))
-                tab.background = ContextCompat.getDrawable(this, R.drawable.tab_active_border)
-            } else {
-                textView?.setTextColor(Color.parseColor("#757575"))
-                tab.background = ContextCompat.getDrawable(this, R.drawable.tab_border_highlight)
-            }
-        }
-    }
-
-    // Data class for order total calculation
     data class OrderTotal(
         val pureWaterQty: Int,
         val pureWaterPrice: Double,
@@ -746,6 +967,10 @@ class CreateOrderActivity : AppCompatActivity() {
         val mineralWaterTotal: Double,
         val waterSubtotal: Double,
         val deliveryFee: Double,
+        val transactionFee: Double,
         val grandTotal: Double
     ) : java.io.Serializable
+
+    private fun Int.dpToPx(): Int =
+        (this * resources.displayMetrics.density).toInt()
 }

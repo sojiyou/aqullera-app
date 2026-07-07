@@ -1,5 +1,6 @@
 package com.example.aquallera
 
+import android.animation.ValueAnimator
 import android.app.Dialog
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -8,8 +9,11 @@ import android.graphics.Canvas
 import android.graphics.Color
 import android.location.Location
 import android.os.Bundle
+import android.view.MotionEvent
 import android.view.View
+import android.view.animation.DecelerateInterpolator
 import android.widget.Button
+import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
@@ -38,12 +42,17 @@ import com.mapbox.maps.plugin.locationcomponent.location
 
 class MapActivity : AppCompatActivity() {
 
-    private lateinit var waterStationName: TextView
-    private lateinit var viewDetailsBtn: Button
+    private lateinit var tvSelectedStationName: TextView
+    private lateinit var tvSelectedStationAddress: TextView
+    private lateinit var btnViewStationDetails: Button
+    private lateinit var btnDeselectStation: TextView
     private lateinit var mapView: MapView
     private lateinit var btnHowToOrder: Button
+    private lateinit var btnUserLocation: ImageView
     private lateinit var recyclerViewStations: RecyclerView
-    private lateinit var selectedStationInfo: LinearLayout
+    private lateinit var selectedStationCard: LinearLayout
+    private lateinit var bottomSheet: LinearLayout
+    private lateinit var dragHandle: LinearLayout
     private lateinit var emptyState: LinearLayout
 
     private var selectedStation: WaterStation? = null
@@ -56,6 +65,15 @@ class MapActivity : AppCompatActivity() {
     private val markerDataList = mutableListOf<MarkerData>()
     private var currentZoom = MIN_ZOOM
     private var pointAnnotationManager: PointAnnotationManager? = null
+
+    // Bottom sheet drag
+    private var sheetStartY = 0f
+    private var sheetOffset = 0f
+    private var sheetHeight = 0f
+    private var parentHeight = 0f
+    private val SNAP_PCT_15 = 0.15f
+    private val SNAP_PCT_55 = 0.55f
+    private val SNAP_PCT_85 = 0.85f
 
     companion object {
         private const val LOCATION_PERMISSION_REQUEST_CODE = 1001
@@ -90,6 +108,7 @@ class MapActivity : AppCompatActivity() {
         setupMap()
         setupClickListeners()
         setupBottomNavigation()
+        setupBottomSheet()
         getUserLocation()
     }
 
@@ -118,15 +137,20 @@ class MapActivity : AppCompatActivity() {
     // -------------------------------------------------------------------------
 
     private fun initializeViews() {
-        waterStationName = findViewById(R.id.waterStationName)
-        viewDetailsBtn = findViewById(R.id.viewDetailsBtn)
+        tvSelectedStationName = findViewById(R.id.tvSelectedStationName)
+        tvSelectedStationAddress = findViewById(R.id.tvSelectedStationAddress)
+        btnViewStationDetails = findViewById(R.id.btnViewStationDetails)
+        btnDeselectStation = findViewById(R.id.btnDeselectStation)
         mapView = findViewById(R.id.mapView)
         btnHowToOrder = findViewById(R.id.btnHowToOrder)
+        btnUserLocation = findViewById(R.id.btnUserLocation)
         recyclerViewStations = findViewById(R.id.recyclerViewStations)
-        selectedStationInfo = findViewById(R.id.selectedStationInfo)
+        selectedStationCard = findViewById(R.id.selectedStationCard)
+        bottomSheet = findViewById(R.id.bottomSheet)
+        dragHandle = findViewById(R.id.dragHandle)
         emptyState = findViewById(R.id.emptyState)
 
-        selectedStationInfo.visibility = View.GONE
+        selectedStationCard.visibility = View.GONE
     }
 
     private fun setupRecyclerView() {
@@ -136,7 +160,8 @@ class MapActivity : AppCompatActivity() {
             onViewOnMapClick = { station ->
                 selectedStation = station
                 zoomToStation(station)
-                showSelectedStationInfo(station)
+                showSelectedStationCard(station)
+                animateSheetTo(SNAP_PCT_15)
             }
         )
 
@@ -188,7 +213,7 @@ class MapActivity : AppCompatActivity() {
     private fun setupClickListeners() {
         btnHowToOrder.setOnClickListener { showHowToOrderDialog() }
 
-        viewDetailsBtn.setOnClickListener {
+        btnViewStationDetails.setOnClickListener {
             val station = selectedStation
             if (station != null) {
                 val intent = Intent(this, StoreDetailsActivity::class.java)
@@ -196,6 +221,19 @@ class MapActivity : AppCompatActivity() {
                 startActivity(intent)
             } else {
                 Toast.makeText(this, "Please select a water station first", Toast.LENGTH_SHORT).show()
+            }
+        }
+
+        btnDeselectStation.setOnClickListener {
+            selectedStation = null
+            selectedStationCard.visibility = View.GONE
+        }
+
+        btnUserLocation.setOnClickListener {
+            if (hasLocationPermission()) {
+                getUserLocationAndFlyTo()
+            } else {
+                requestLocationPermission()
             }
         }
     }
@@ -221,6 +259,70 @@ class MapActivity : AppCompatActivity() {
     }
 
     // -------------------------------------------------------------------------
+    // Bottom Sheet
+    // -------------------------------------------------------------------------
+
+    private fun setupBottomSheet() {
+        bottomSheet.post {
+            sheetHeight = bottomSheet.height.toFloat()
+            parentHeight = (bottomSheet.parent as View).height.toFloat()
+
+            val initialHeight = (parentHeight * SNAP_PCT_55).toInt()
+            bottomSheet.layoutParams.height = initialHeight
+            bottomSheet.requestLayout()
+
+            dragHandle.setOnTouchListener { _, event ->
+                handleSheetDrag(event)
+                true
+            }
+        }
+    }
+
+    private fun handleSheetDrag(event: MotionEvent) {
+        when (event.action) {
+            MotionEvent.ACTION_DOWN -> {
+                sheetStartY = event.rawY
+                sheetOffset = parentHeight - bottomSheet.height
+            }
+            MotionEvent.ACTION_MOVE -> {
+                val deltaY = event.rawY - sheetStartY
+                val newHeight = (parentHeight - (sheetOffset + deltaY)).toInt()
+                    .coerceIn((parentHeight * 0.1f).toInt(), parentHeight)
+                bottomSheet.layoutParams.height = newHeight
+                bottomSheet.requestLayout()
+            }
+            MotionEvent.ACTION_UP -> {
+                val currentHeight = bottomSheet.height.toFloat()
+                val snapHeight = findNearestSnap(currentHeight)
+                animateSheetTo(snapHeight / parentHeight)
+            }
+        }
+    }
+
+    private fun findNearestSnap(currentHeight: Float): Float {
+        val ratios = listOf(SNAP_PCT_15, SNAP_PCT_55, SNAP_PCT_85)
+        val heights = ratios.map { it * parentHeight }
+        return heights.minByOrNull { kotlin.math.abs(it - currentHeight) } ?: (parentHeight * SNAP_PCT_55)
+    }
+
+    private fun animateSheetTo(ratio: Float) {
+        val targetHeight = (parentHeight * ratio).toInt()
+        val startHeight = bottomSheet.height
+
+        if (startHeight == targetHeight) return
+
+        ValueAnimator.ofInt(startHeight, targetHeight).apply {
+            duration = 250
+            interpolator = DecelerateInterpolator()
+            addUpdateListener { anim ->
+                bottomSheet.layoutParams.height = anim.animatedValue as Int
+                bottomSheet.requestLayout()
+            }
+            start()
+        }
+    }
+
+    // -------------------------------------------------------------------------
     // Location
     // -------------------------------------------------------------------------
 
@@ -231,6 +333,28 @@ class MapActivity : AppCompatActivity() {
                 if (location != null) {
                     userLocation = location
                     stationAdapter.updateUserLocation(location)
+                }
+            }
+        } catch (e: SecurityException) {
+            Toast.makeText(this, "Location error: ${e.message}", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun getUserLocationAndFlyTo() {
+        try {
+            fusedLocationClient.lastLocation.addOnSuccessListener { location ->
+                if (location != null) {
+                    userLocation = location
+                    stationAdapter.updateUserLocation(location)
+                    mapView.getMapboxMap().setCamera(
+                        CameraOptions.Builder()
+                            .center(Point.fromLngLat(location.longitude, location.latitude))
+                            .zoom(15.0)
+                            .build()
+                    )
+                    Toast.makeText(this, "Finding your location...", Toast.LENGTH_SHORT).show()
+                } else {
+                    Toast.makeText(this, "Unable to get current location", Toast.LENGTH_SHORT).show()
                 }
             }
         } catch (e: SecurityException) {
@@ -255,7 +379,7 @@ class MapActivity : AppCompatActivity() {
         try {
             mapView.location.updateSettings {
                 enabled = true
-                pulsingEnabled = false
+                pulsingEnabled = true
             }
         } catch (e: Exception) {
             Toast.makeText(this, "Could not enable location tracking", Toast.LENGTH_SHORT).show()
@@ -320,7 +444,7 @@ class MapActivity : AppCompatActivity() {
                     val markerData = markerDataList.find { it.annotationId == clicked.id.toString() }
                     markerData?.let {
                         selectedStation = it.station
-                        showSelectedStationInfo(it.station)
+                        showSelectedStationCard(it.station)
                         zoomToStation(it.station)
                     }
                     true
@@ -369,9 +493,10 @@ class MapActivity : AppCompatActivity() {
         )
     }
 
-    private fun showSelectedStationInfo(station: WaterStation) {
-        waterStationName.text = station.stationName
-        selectedStationInfo.visibility = View.VISIBLE
+    private fun showSelectedStationCard(station: WaterStation) {
+        tvSelectedStationName.text = station.stationName
+        tvSelectedStationAddress.text = station.address.ifEmpty { "Address not available" }
+        selectedStationCard.visibility = View.VISIBLE
     }
 
     // -------------------------------------------------------------------------
@@ -441,11 +566,14 @@ class MapActivity : AppCompatActivity() {
             val text = findViewById<TextView>(textId)
             val isActive = tab == activeTab
 
-            text.setTextColor(Color.parseColor(if (isActive) "#2196F3" else "#757575"))
-            tab.background = ContextCompat.getDrawable(
-                this,
-                if (isActive) R.drawable.tab_active_border else R.drawable.tab_border_highlight
-            )
+            if (isActive) {
+                text.setTextColor(Color.WHITE)
+                text.alpha = 1.0f
+            } else {
+                text.setTextColor(ContextCompat.getColor(this, R.color.light_yellow))
+                text.alpha = 0.6f
+            }
+            tab.background = null
         }
     }
 }

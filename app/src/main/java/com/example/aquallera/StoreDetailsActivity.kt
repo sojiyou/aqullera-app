@@ -8,28 +8,30 @@ import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
-import androidx.cardview.widget.CardView
 
 class StoreDetailsActivity : AppCompatActivity() {
 
     private lateinit var tvStoreName: TextView
     private lateinit var tvAddress: TextView
-    private lateinit var tvPhone: TextView
-    private lateinit var tvHours: TextView
-    private lateinit var tvServices: TextView
-    private lateinit var tvPrices: TextView
     private lateinit var btnOrder: Button
     private lateinit var btnReturn: Button
-    private lateinit var pricesCard: CardView
+    private lateinit var btnBack: TextView
 
-    private lateinit var deliveryHoursSection: LinearLayout
-    private lateinit var tvDeliveryHoursLabel: TextView
-    private lateinit var deliveryTimesContainer: LinearLayout
+    private lateinit var badgesContainer: LinearLayout
+    private lateinit var businessHoursContainer: LinearLayout
+    private lateinit var tvServicesSummary: TextView
+    private lateinit var servicesChipsContainer: LinearLayout
+    private lateinit var deliveryHoursCard: LinearLayout
+    private lateinit var deliveryChipsContainer: LinearLayout
+    private lateinit var tvPurePrice: TextView
+    private lateinit var tvSpringPrice: TextView
+    private lateinit var tvMineralPrice: TextView
+    private lateinit var aboutCard: LinearLayout
+    private lateinit var tvAbout: TextView
 
     private var currentStation: WaterStation? = null
 
-    // Keys that should always appear first, in this order
-    private val HOURS_KEY_ORDER = listOf("open", "opening", "start", "close", "closing", "end")
+    private val daysOfWeek = listOf("Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday")
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -51,17 +53,21 @@ class StoreDetailsActivity : AppCompatActivity() {
     private fun initializeViews() {
         tvStoreName = findViewById(R.id.tvStoreName)
         tvAddress = findViewById(R.id.tvAddress)
-        tvPhone = findViewById(R.id.tvPhone)
-        tvHours = findViewById(R.id.tvHours)
-        tvServices = findViewById(R.id.tvServices)
-        tvPrices = findViewById(R.id.tvPrices)
         btnOrder = findViewById(R.id.btnOrder)
         btnReturn = findViewById(R.id.btnReturn)
-        pricesCard = findViewById(R.id.pricesCard)
+        btnBack = findViewById(R.id.btnBack)
 
-        deliveryHoursSection = findViewById(R.id.deliveryHoursSection)
-        tvDeliveryHoursLabel = findViewById(R.id.tvDeliveryHoursLabel)
-        deliveryTimesContainer = findViewById(R.id.deliveryTimesContainer)
+        badgesContainer = findViewById(R.id.badgesContainer)
+        businessHoursContainer = findViewById(R.id.businessHoursContainer)
+        tvServicesSummary = findViewById(R.id.tvServicesSummary)
+        servicesChipsContainer = findViewById(R.id.servicesChipsContainer)
+        deliveryHoursCard = findViewById(R.id.deliveryHoursCard)
+        deliveryChipsContainer = findViewById(R.id.deliveryChipsContainer)
+        tvPurePrice = findViewById(R.id.tvPurePrice)
+        tvSpringPrice = findViewById(R.id.tvSpringPrice)
+        tvMineralPrice = findViewById(R.id.tvMineralPrice)
+        aboutCard = findViewById(R.id.aboutCard)
+        tvAbout = findViewById(R.id.tvAbout)
     }
 
     private fun displayStationDetails(station: WaterStation) {
@@ -73,35 +79,106 @@ class StoreDetailsActivity : AppCompatActivity() {
             station.state.takeIf { it.isNotEmpty() },
             station.zipCode.takeIf { it.isNotEmpty() }
         )
-        tvAddress.text = addressParts.joinToString(", ")
+        tvAddress.text = addressParts.joinToString(", ").ifEmpty { "Address not available" }
 
-        tvPhone.text = station.phone
-
-        // Sort entries so "open" always comes before "close", regardless of
-        // how Firebase returns them (HashMap has no guaranteed order).
-        val hoursText = if (station.businessHours.isNotEmpty()) {
-            station.businessHours.entries
-                .sortedWith(compareBy { entry ->
-                    val keyLower = entry.key.lowercase()
-                    val index = HOURS_KEY_ORDER.indexOfFirst { keyLower.contains(it) }
-                    if (index >= 0) index else Int.MAX_VALUE
-                })
-                .joinToString("\n") { (day, time) -> "$day: $time" }
-        } else {
-            "Opens 7AM - 7PM"
-        }
-        tvHours.text = hoursText
-
+        displayStatusBadges(station)
+        displayBusinessHours(station)
+        displayServices(station)
         displayDeliveryHours(station)
+        displayPrices(station)
+        displayAbout(station)
+    }
 
-        val radius = station.getDeliveryRadiusInt()
-        tvServices.text = if (radius > 0) {
-            "Accepts Delivery (${radius}km radius) and Pick up"
+    private fun displayStatusBadges(station: WaterStation) {
+        badgesContainer.removeAllViews()
+        badgesContainer.visibility = View.VISIBLE
+
+        val status = station.status.lowercase()
+        val isApproved = status == "approved"
+
+        val statusBadge = createBadge(
+            if (isApproved) "Approved" else "Pending",
+            if (isApproved) R.drawable.status_completed_bg else R.drawable.status_preparing_bg
+        )
+        badgesContainer.addView(statusBadge)
+    }
+
+    private fun displayBusinessHours(station: WaterStation) {
+        businessHoursContainer.removeAllViews()
+
+        val todayIndex = getTodayIndex()
+        val hoursEntries = if (station.businessHours.isNotEmpty()) {
+            station.businessHours
         } else {
-            "Accepts Pick up only"
+            mapOf(
+                "Monday" to "7:00 AM - 7:00 PM",
+                "Tuesday" to "7:00 AM - 7:00 PM",
+                "Wednesday" to "7:00 AM - 7:00 PM",
+                "Thursday" to "7:00 AM - 7:00 PM",
+                "Friday" to "7:00 AM - 7:00 PM",
+                "Saturday" to "7:00 AM - 7:00 PM",
+                "Sunday" to "7:00 AM - 7:00 PM"
+            )
         }
 
-        displayPrices(station)
+        val sortedDays = daysOfWeek.filter { it in hoursEntries }
+
+        for ((index, day) in sortedDays.withIndex()) {
+            val hours = hoursEntries[day] ?: "Closed"
+            val isToday = index == todayIndex || (sortedDays.size > todayIndex && sortedDays[todayIndex] == day)
+
+            val row = LinearLayout(this).apply {
+                layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT
+                ).apply { setPadding(0, 6, 0, 6) }
+                orientation = LinearLayout.HORIZONTAL
+                gravity = android.view.Gravity.CENTER_VERTICAL
+            }
+
+            val dayText = TextView(this).apply {
+                text = day
+                textSize = 14f
+                setTextColor(resources.getColor(android.R.color.darker_gray, null))
+                layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+            }
+
+            val hoursText = TextView(this).apply {
+                text = hours
+                textSize = 14f
+                setTextColor(resources.getColor(R.color.midnight_blue, null))
+                if (isToday) setTypeface(null, android.graphics.Typeface.BOLD)
+            }
+
+            row.addView(dayText)
+            row.addView(hoursText)
+            businessHoursContainer.addView(row)
+        }
+    }
+
+    private fun displayServices(station: WaterStation) {
+        servicesChipsContainer.removeAllViews()
+
+        val services = station.serviceTypes
+        if (services.isEmpty()) {
+            tvServicesSummary.text = "No services listed"
+            return
+        }
+
+        val hasDelivery = services.contains("delivery")
+        val hasPickup = services.contains("pickup")
+
+        tvServicesSummary.text = when {
+            hasDelivery && hasPickup -> "Pickup & Delivery"
+            hasDelivery -> "Delivery Only"
+            hasPickup -> "Pickup Only"
+            else -> services.joinToString(", ")
+        }
+
+        for (service in services) {
+            val chip = createServiceChip(service)
+            servicesChipsContainer.addView(chip)
+        }
     }
 
     private fun displayDeliveryHours(station: WaterStation) {
@@ -109,20 +186,94 @@ class StoreDetailsActivity : AppCompatActivity() {
         val deliveryHours = station.deliveryHours
 
         if (hasDelivery && !deliveryHours.isNullOrEmpty()) {
-            deliveryHoursSection.visibility = View.VISIBLE
-            deliveryTimesContainer.removeAllViews()
+            deliveryHoursCard.visibility = View.VISIBLE
+            deliveryChipsContainer.removeAllViews()
 
             deliveryHours.forEach { time ->
-                val timeTextView = TextView(this).apply {
-                    text = formatTime(time)
-                    textSize = 14f
-                    setTextColor(resources.getColor(android.R.color.darker_gray, null))
-                    setPadding(0, 4, 0, 4)
-                }
-                deliveryTimesContainer.addView(timeTextView)
+                val chip = createDeliveryTimeChip(time)
+                deliveryChipsContainer.addView(chip)
             }
         } else {
-            deliveryHoursSection.visibility = View.GONE
+            deliveryHoursCard.visibility = View.GONE
+        }
+    }
+
+    private fun displayPrices(station: WaterStation) {
+        val purePrice = station.pricing_gallon_pure
+        val springPrice = station.pricing_liter_spring
+        val mineralPrice = station.pricing_gallon_mineral
+
+        tvPurePrice.text = if (purePrice != null) "₱${String.format("%.2f", purePrice)}" else "—"
+        tvSpringPrice.text = if (springPrice != null) "₱${String.format("%.2f", springPrice)}" else "—"
+        tvMineralPrice.text = if (mineralPrice != null) "₱${String.format("%.2f", mineralPrice)}" else "—"
+    }
+
+    private fun displayAbout(station: WaterStation) {
+        val aboutText = station.about
+        if (!aboutText.isNullOrBlank()) {
+            aboutCard.visibility = View.VISIBLE
+            tvAbout.text = aboutText
+        } else {
+            aboutCard.visibility = View.GONE
+        }
+    }
+
+    // Helper methods
+
+    private fun createBadge(text: String, bgRes: Int): TextView {
+        return TextView(this).apply {
+            this.text = text
+            textSize = 11f
+            setTextColor(android.graphics.Color.WHITE)
+            setBackgroundResource(bgRes)
+            setPadding(
+                dpToPx(8),
+                dpToPx(2),
+                dpToPx(8),
+                dpToPx(2)
+            )
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply { marginEnd = dpToPx(6) }
+        }
+    }
+
+    private fun createServiceChip(service: String): TextView {
+        return TextView(this).apply {
+            text = service.replaceFirstChar { it.uppercase() }
+            textSize = 12f
+            setTextColor(resources.getColor(R.color.midnight_blue, null))
+            setBackgroundResource(R.drawable.status_pending_bg)
+            setPadding(
+                dpToPx(12),
+                dpToPx(4),
+                dpToPx(12),
+                dpToPx(4)
+            )
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply { marginEnd = dpToPx(6) }
+        }
+    }
+
+    private fun createDeliveryTimeChip(time: String): TextView {
+        return TextView(this).apply {
+            text = formatTime(time)
+            textSize = 12f
+            setTextColor(resources.getColor(R.color.midnight_blue, null))
+            setBackgroundResource(R.drawable.status_pending_bg)
+            setPadding(
+                dpToPx(12),
+                dpToPx(4),
+                dpToPx(12),
+                dpToPx(4)
+            )
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply { marginEnd = dpToPx(6) }
         }
     }
 
@@ -146,20 +297,24 @@ class StoreDetailsActivity : AppCompatActivity() {
         }
     }
 
-    private fun displayPrices(station: WaterStation) {
-        val priceList = mutableListOf<String>()
-
-        station.pricing_gallon_pure?.let { priceList.add("Pure Water: ₱${String.format("%.2f", it)}/gallon") }
-        station.pricing_liter_spring?.let { priceList.add("Spring Water: ₱${String.format("%.2f", it)}/liter") }
-        station.pricing_gallon_mineral?.let { priceList.add("Mineral Water: ₱${String.format("%.2f", it)}/gallon") }
-        station.pricing_delivery_fee?.let { priceList.add("Delivery Fee: ₱${String.format("%.2f", it)}") }
-
-        if (priceList.isNotEmpty()) {
-            pricesCard.visibility = View.VISIBLE
-            tvPrices.text = priceList.joinToString("\n")
-        } else {
-            pricesCard.visibility = View.GONE
+    private fun getTodayIndex(): Int {
+        val cal = java.util.Calendar.getInstance()
+        val dayOfWeek = cal.get(java.util.Calendar.DAY_OF_WEEK)
+        return when (dayOfWeek) {
+            java.util.Calendar.SUNDAY -> 0
+            java.util.Calendar.MONDAY -> 1
+            java.util.Calendar.TUESDAY -> 2
+            java.util.Calendar.WEDNESDAY -> 3
+            java.util.Calendar.THURSDAY -> 4
+            java.util.Calendar.FRIDAY -> 5
+            java.util.Calendar.SATURDAY -> 6
+            else -> -1
         }
+    }
+
+    private fun dpToPx(dp: Int): Int {
+        val density = resources.displayMetrics.density
+        return (dp * density).toInt()
     }
 
     private fun setupClickListeners() {
@@ -168,7 +323,10 @@ class StoreDetailsActivity : AppCompatActivity() {
         }
 
         btnReturn.setOnClickListener {
-            startActivity(Intent(this, MapActivity::class.java))
+            finish()
+        }
+
+        btnBack.setOnClickListener {
             finish()
         }
     }

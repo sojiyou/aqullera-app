@@ -21,5 +21,14 @@
     <color name="input_bg">#D9D9D9</color>
 
     <color name="order_list_bg">#F4E8BB</color>
+    <color name="text_card">#F4E7BB</color>
 
+    <!-- status colors -->
+    <color name="status_pending">#E5C95F</color>
+    <color name="status_confirmed">#2196F3</color>
+    <color name="status_preparing">#3F51B5</color>
+    <color name="status_on_delivery">#FF9800</color>
+    <color name="status_ready">#009688</color>
+    <color name="status_completed">#4CAF50</color>
+    <color name="status_cancelled">#F44336</color>
 </resources>

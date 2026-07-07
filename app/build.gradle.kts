@@ -9,6 +9,7 @@ plugins {
 android {
     namespace = "com.example.aquallera"
     compileSdk = 36
+    buildToolsVersion = "36.1.0"
     // Changed from 36 to 34 (standard)
 
     defaultConfig {
@@ -28,6 +29,18 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+        }
+        debug {
+            signingConfig = signingConfigs.getByName("debug")
+        }
+    }
+
+    signingConfigs {
+        debug {
+            storeFile = file("${System.getProperty("user.home")}/AppData/Local/Temp/debug.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
         }
     }
 
@@ -69,6 +82,9 @@ dependencies {
     implementation("com.google.firebase:firebase-auth-ktx")
     // Remove Google Maps if not needed
     // implementation(libs.play.services.maps)
+
+    // Coroutines
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
 
     // Mapbox dependencies
     implementation("com.mapbox.maps:android:11.0.0")

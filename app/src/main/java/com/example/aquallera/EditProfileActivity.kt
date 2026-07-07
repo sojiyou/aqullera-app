@@ -10,6 +10,7 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
+import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.database.DataSnapshot
 import com.google.firebase.database.DatabaseError
 import com.google.firebase.database.ValueEventListener
@@ -19,10 +20,8 @@ class EditProfileActivity : AppCompatActivity() {
     private lateinit var etFullName: EditText
     private lateinit var etEmail: EditText
     private lateinit var etNumber: EditText
-    private lateinit var etPassword: EditText
-    private lateinit var etConfirmPassword: EditText
     private lateinit var btnSaveProfile: Button
-    private lateinit var btnCancel: Button
+    private lateinit var btnBack: TextView
 
     private var currentUserKey: String = ""
     private var originalEmail: String = ""
@@ -41,10 +40,8 @@ class EditProfileActivity : AppCompatActivity() {
         etFullName = findViewById(R.id.etFullName)
         etEmail = findViewById(R.id.etEmail)
         etNumber = findViewById(R.id.etNumber)
-        etPassword = findViewById(R.id.etPassword)
-        etConfirmPassword = findViewById(R.id.etConfirmPassword)
         btnSaveProfile = findViewById(R.id.btnSaveProfile)
-        btnCancel = findViewById(R.id.btnCancel)
+        btnBack = findViewById(R.id.btnBack)
     }
 
     private fun setupClickListeners() {
@@ -54,47 +51,38 @@ class EditProfileActivity : AppCompatActivity() {
             }
         }
 
-        btnCancel.setOnClickListener {
+        btnBack.setOnClickListener {
             finish()
         }
     }
 
     private fun loadCurrentUserData() {
-        val sharedPref = getSharedPreferences("user_prefs", MODE_PRIVATE)
-        val userEmail = sharedPref.getString("user_email", "")
-
-        if (!userEmail.isNullOrEmpty()) {
-            fetchUserDataForEditing(userEmail)
-        } else {
+        val currentUser = FirebaseAuth.getInstance().currentUser ?: run {
             Toast.makeText(this, "User not found", Toast.LENGTH_SHORT).show()
             finish()
+            return
         }
-    }
 
-    private fun fetchUserDataForEditing(userEmail: String) {
+        currentUserKey = currentUser.uid
+
         val database = FirebaseConfig.getDatabaseReference()
-        val usersRef = database.child("users")
-
-        usersRef.orderByChild("email").equalTo(userEmail)
+        database.child("users").child(currentUser.uid)
             .addListenerForSingleValueEvent(object : ValueEventListener {
                 override fun onDataChange(dataSnapshot: DataSnapshot) {
-                    if (dataSnapshot.exists()) {
-                        for (userSnapshot in dataSnapshot.children) {
-                            currentUserKey = userSnapshot.key ?: ""
-                            val user = userSnapshot.getValue(User::class.java)
-                            if (user != null) {
-                                populateEditFields(user)
-                                return
-                            }
-                        }
+                    val user = dataSnapshot.getValue(User::class.java)
+                    if (user != null) {
+                        populateEditFields(user)
+                    } else {
+                        etFullName.setText(currentUser.displayName ?: "")
+                        etEmail.setText(currentUser.email ?: "")
+                        originalEmail = currentUser.email ?: ""
                     }
-                    Toast.makeText(this@EditProfileActivity, "User data not found", Toast.LENGTH_SHORT).show()
-                    finish()
                 }
 
-                override fun onCancelled(databaseError: DatabaseError) {
-                    Toast.makeText(this@EditProfileActivity, "Failed to load user data", Toast.LENGTH_SHORT).show()
-                    finish()
+                override fun onCancelled(error: DatabaseError) {
+                    etFullName.setText(currentUser.displayName ?: "")
+                    etEmail.setText(currentUser.email ?: "")
+                    originalEmail = currentUser.email ?: ""
                 }
             })
     }
@@ -110,8 +98,6 @@ class EditProfileActivity : AppCompatActivity() {
         val fullName = etFullName.text.toString().trim()
         val email = etEmail.text.toString().trim()
         val number = etNumber.text.toString().trim()
-        val password = etPassword.text.toString()
-        val confirmPassword = etConfirmPassword.text.toString()
 
         if (fullName.isEmpty()) {
             etFullName.error = "Full name is required"
@@ -133,19 +119,6 @@ class EditProfileActivity : AppCompatActivity() {
             return false
         }
 
-        // Password validation (only if user wants to change password)
-        if (password.isNotEmpty() || confirmPassword.isNotEmpty()) {
-            if (password.length < 6) {
-                etPassword.error = "Password must be at least 6 characters"
-                return false
-            }
-
-            if (password != confirmPassword) {
-                etConfirmPassword.error = "Passwords do not match"
-                return false
-            }
-        }
-
         return true
     }
 
@@ -153,7 +126,6 @@ class EditProfileActivity : AppCompatActivity() {
         val fullName = etFullName.text.toString().trim()
         val email = etEmail.text.toString().trim()
         val number = etNumber.text.toString().trim()
-        val password = etPassword.text.toString()
 
         if (currentUserKey.isEmpty()) {
             Toast.makeText(this, "User not found", Toast.LENGTH_SHORT).show()
@@ -163,20 +135,16 @@ class EditProfileActivity : AppCompatActivity() {
         val database = FirebaseConfig.getDatabaseReference()
         val userRef = database.child("users").child(currentUserKey)
 
-        // Create updated user object
-        val updatedUser = User(fullName, email, number, password.ifEmpty { "existing_password" })
+        val updatedUser = mapOf(
+            "fullName" to fullName,
+            "email" to email,
+            "number" to number
+        )
 
-        userRef.setValue(updatedUser)
+        userRef.updateChildren(updatedUser)
             .addOnSuccessListener {
-                // Update SharedPreferences
                 updateLocalUserData(fullName, email, number)
-
                 Toast.makeText(this, "Profile updated successfully", Toast.LENGTH_SHORT).show()
-
-                // Return to ProfileActivity
-                val intent = Intent(this, ProfileActivity::class.java)
-                intent.flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
-                startActivity(intent)
                 finish()
             }
             .addOnFailureListener { e ->
@@ -199,24 +167,18 @@ class EditProfileActivity : AppCompatActivity() {
         val navOrders = findViewById<LinearLayout>(R.id.navOrder)
         val navProfile = findViewById<LinearLayout>(R.id.navProfile)
 
-        // Set no active tab in edit profile
         setInactiveTabs()
+
         navMap.setOnClickListener {
-            val intent = Intent(this, MapActivity::class.java)
-            startActivity(intent)
-            finish()
+            startActivity(Intent(this, MapActivity::class.java))
         }
 
         navOrders.setOnClickListener {
-            val intent = Intent(this, OrdersActivity::class.java)
-            startActivity(intent)
-            finish()
+            startActivity(Intent(this, OrdersActivity::class.java))
         }
 
         navProfile.setOnClickListener {
-            val intent = Intent(this, ProfileActivity::class.java)
-            startActivity(intent)
-            finish()
+            startActivity(Intent(this, ProfileActivity::class.java))
         }
     }
 

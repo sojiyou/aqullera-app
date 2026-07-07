@@ -2,12 +2,12 @@
     <string name="app_name">Aquallera</string>
 
     <!--Mapbox token -->
-    <string name="mapbox_access_token">pk.eyJ1Ijoic29qaXlvdSIsImEiOiJjbWk4ZXRybmgwYmxkMmlweHNiNHhnM3V2In0.zIlAkkuMeFdQV9FPR6OgkQ</string>
+    <string name="mapbox_access_token">YOUR_MAPBOX_ACCESS_TOKEN</string>
 
     <!-- footer strings -->
     <string name="tvAppName">AQUA-LLERA</string>
     <string name="facebookDesc">Facebook</string>
-    <string name="instagramDesc">Instagram</string>
+    <string name="globeDesc">Website</string>
     <string name="ContactUs">Contact Us:</string>
     <string name="footerEmail">aquallera@gmail.com</string>
     <string name="footerLocation">2600, Baguio City Philippines</string>

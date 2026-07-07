@@ -2,7 +2,7 @@
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:background="@color/midnight_blue"
+    android:background="@color/footer_bg"
     android:orientation="vertical"
     android:padding="16dp">
 
@@ -33,19 +33,19 @@
 
             <ImageView
                 android:id="@+id/FacebookIcon"
-                android:layout_width="24dp"
-                android:layout_height="24dp"
+                android:layout_width="20dp"
+                android:layout_height="20dp"
                 android:layout_marginEnd="8dp"
                 android:contentDescription="@string/facebookDesc"
-                android:src="@drawable/icons8_facebook_logo_48" />
+                android:src="@drawable/ic_facebook" />
 
             <ImageView
-                android:id="@+id/InstagramIcon"
-                android:layout_width="24dp"
-                android:layout_height="24dp"
+                android:id="@+id/GlobeIcon"
+                android:layout_width="20dp"
+                android:layout_height="20dp"
                 android:layout_marginEnd="8dp"
-                android:contentDescription="@string/instagramDesc"
-                android:src="@drawable/icons8_instagram_logo_48" />
+                android:contentDescription="@string/globeDesc"
+                android:src="@drawable/ic_globe_white" />
         </LinearLayout>
     </LinearLayout>
 

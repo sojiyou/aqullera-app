@@ -37,6 +37,7 @@ data class WaterStation(
     @PropertyName("deliveryHours") val deliveryHours: List<String>? = null,
     @PropertyName("businessHours") val businessHours: Map<String, String> = emptyMap(),
     @PropertyName("serviceTypes") val serviceTypes: List<String> = emptyList(),
+    @PropertyName("about") val about: String = "",
     @PropertyName("createdAt") val createdAt: String = "",
     @PropertyName("updatedAt") val updatedAt: String = "",
 

@@ -21,30 +21,29 @@ class OrdersActivity : AppCompatActivity() {
     private lateinit var database: DatabaseReference
     private lateinit var ordersContainer: LinearLayout
     private lateinit var progressBar: ProgressBar
-    private lateinit var tvEmptyState: TextView
+    private lateinit var tvEmptyState: LinearLayout
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_orders)
 
-        // Initialize Firebase with CORRECT URL
         auth = FirebaseAuth.getInstance()
         database = FirebaseDatabase.getInstance("https://aquallera-default-rtdb.asia-southeast1.firebasedatabase.app").reference
 
-        Log.d("OrdersDebug", "OrdersActivity started")
-
-        // Initialize views
         ordersContainer = findViewById(R.id.ordersContainer)
         progressBar = findViewById(R.id.progressBar)
         tvEmptyState = findViewById(R.id.tvEmptyState)
 
-        // Initially hide empty state
         tvEmptyState.visibility = View.GONE
         ordersContainer.visibility = View.VISIBLE
 
         setupBottomNavigation()
         loadUserOrders()
     }
+
+    // -------------------------------------------------------------------------
+    // Loading
+    // -------------------------------------------------------------------------
 
     private fun loadUserOrders() {
         val currentUser = auth.currentUser
@@ -56,58 +55,44 @@ class OrdersActivity : AppCompatActivity() {
         }
 
         val userId = currentUser.uid
-        Log.d("OrdersDebug", "Loading orders for user: $userId")
-
-        // Show loading
         progressBar.visibility = View.VISIBLE
         ordersContainer.removeAllViews()
 
-        // Query orders where customerId matches current user
         database.child("orders")
             .orderByChild("customerId")
             .equalTo(userId)
             .addListenerForSingleValueEvent(object : ValueEventListener {
                 override fun onDataChange(dataSnapshot: DataSnapshot) {
                     progressBar.visibility = View.GONE
-                    Log.d("OrdersDebug", "DataSnapshot exists: ${dataSnapshot.exists()}")
-                    Log.d("OrdersDebug", "Children count: ${dataSnapshot.childrenCount}")
 
                     if (dataSnapshot.exists()) {
                         val ordersList = mutableListOf<Order>()
 
-                        // Collect all orders
                         for (orderSnapshot in dataSnapshot.children) {
-                            Log.d("OrdersDebug", "Processing order: ${orderSnapshot.key}")
-
                             try {
                                 val order = orderSnapshot.getValue(Order::class.java)
                                 if (order != null) {
-                                    Log.d("OrdersDebug", "Auto-parsed order: ${order.referenceNumber}")
                                     ordersList.add(order)
                                 } else {
-                                    Log.d("OrdersDebug", "Auto-parse failed, trying manual parse")
                                     try {
                                         val manualOrder = parseOrderManually(orderSnapshot)
                                         ordersList.add(manualOrder)
                                     } catch (e2: Exception) {
-                                        Log.e("OrdersDebug", "Manual parse also failed: ${e2.message}")
+                                        Log.e("OrdersDebug", "Manual parse failed: ${e2.message}")
                                     }
                                 }
                             } catch (e: Exception) {
-                                Log.e("OrdersDebug", "Error parsing order: ${e.message}")
                                 try {
                                     val manualOrder = parseOrderManually(orderSnapshot)
                                     ordersList.add(manualOrder)
                                 } catch (e2: Exception) {
-                                    Log.e("OrdersDebug", "Manual parse failed too: ${e2.message}")
+                                    Log.e("OrdersDebug", "Parse failed: ${e2.message}")
                                 }
                             }
                         }
 
-                        // Sort by creation date (newest first)
                         val sortedOrders = ordersList.sortedByDescending { it.createdAt }
 
-                        // Display orders
                         if (sortedOrders.isNotEmpty()) {
                             tvEmptyState.visibility = View.GONE
                             ordersContainer.visibility = View.VISIBLE
@@ -115,55 +100,51 @@ class OrdersActivity : AppCompatActivity() {
                                 addOrderTicket(order)
                             }
                         } else {
-                            Log.d("OrdersDebug", "No orders after parsing")
                             showEmptyState("No orders found")
                         }
-
                     } else {
-                        Log.d("OrdersDebug", "No orders in database")
                         showEmptyState("No orders yet. Place your first order!")
                     }
                 }
 
                 override fun onCancelled(databaseError: DatabaseError) {
                     progressBar.visibility = View.GONE
-                    Log.e("OrdersDebug", "Firebase error: ${databaseError.message}")
                     Toast.makeText(
                         this@OrdersActivity,
                         "Failed to load orders: ${databaseError.message}",
                         Toast.LENGTH_SHORT
                     ).show()
-                    showEmptyState("Failed to load orders: ${databaseError.message}")
+                    showEmptyState("Failed to load orders")
                 }
             })
     }
 
+    // -------------------------------------------------------------------------
+    // Ticket rendering
+    // -------------------------------------------------------------------------
+
     private fun addOrderTicket(order: Order) {
         try {
-            val ticketView = LayoutInflater.from(this).inflate(R.layout.order_ticket_item, ordersContainer, false)
+            val ticketView = LayoutInflater.from(this)
+                .inflate(R.layout.order_ticket_item, ordersContainer, false)
 
             val tvStationName = ticketView.findViewById<TextView>(R.id.tvStationName)
             val tvOrderStatus = ticketView.findViewById<TextView>(R.id.tvOrderStatus)
             val tvOrderDate = ticketView.findViewById<TextView>(R.id.tvOrderDate)
             val tvTicketNumber = ticketView.findViewById<TextView>(R.id.tvTicketNumber)
+            val tvOrderItems = ticketView.findViewById<TextView>(R.id.tvOrderItems)
             val tvOrderPrice = ticketView.findViewById<TextView>(R.id.tvOrderPrice)
 
-            // Set order data
             tvStationName.text = order.stationName ?: "Unknown Station"
             tvOrderStatus.text = order.status ?: "Pending"
             tvOrderDate.text = "Date: ${order.date ?: "N/A"}"
             tvTicketNumber.text = "Ref #: ${order.referenceNumber ?: "N/A"}"
+            tvOrderItems.text = "Items: ${buildItemsSummary(order)}"
+            tvOrderPrice.text = "₱${String.format("%.2f", order.grandTotal)}"
 
-            // Calculate total for display (grandTotal already includes transaction fee)
-            val displayTotal = order.grandTotal
-            tvOrderPrice.text = "₱${String.format("%.2f", displayTotal)}"
-
-            // Set status color
             setStatusStyle(tvOrderStatus, order.status ?: "Pending")
 
-            // Make ticket clickable
             ticketView.setOnClickListener {
-                // Navigate to OrderSuccessActivity with order details
                 val intent = Intent(this, OrderSuccessActivity::class.java)
                 intent.putExtra("FROM_ORDERS_LIST", true)
                 intent.putExtra("ORDER_ID", order.orderId ?: "")
@@ -176,24 +157,54 @@ class OrdersActivity : AppCompatActivity() {
                 intent.putExtra("TRANSACTION_FEE", order.transactionFee ?: 0.0)
                 intent.putExtra("GRAND_TOTAL", order.grandTotal ?: 0.0)
                 intent.putExtra("ORDER_STATUS", order.status ?: "Pending")
-
-                // Pass water details (optional)
                 intent.putExtra("PURE_WATER_QTY", order.pureWaterQty)
                 intent.putExtra("SPRING_WATER_QTY", order.springWaterQty)
                 intent.putExtra("MINERAL_WATER_QTY", order.mineralWaterQty)
-
                 startActivity(intent)
             }
 
             ordersContainer.addView(ticketView)
-            Log.d("OrdersDebug", "Displayed order: ${order.referenceNumber}")
 
         } catch (e: Exception) {
             Log.e("OrdersDebug", "Error creating order ticket: ${e.message}")
         }
     }
 
-    // KEEP THIS FUNCTION - It helps parse orders when automatic parsing fails
+    private fun buildItemsSummary(order: Order): String {
+        val parts = mutableListOf<String>()
+        if (order.pureWaterQty > 0) parts.add("${order.pureWaterQty} Pure")
+        if (order.springWaterQty > 0) parts.add("${order.springWaterQty} Spring")
+        if (order.mineralWaterQty > 0) parts.add("${order.mineralWaterQty} Mineral")
+        return if (parts.isNotEmpty()) parts.joinToString(", ") else "No items"
+    }
+
+    // -------------------------------------------------------------------------
+    // Status colors
+    // -------------------------------------------------------------------------
+
+    private fun setStatusStyle(textView: TextView, status: String) {
+        try {
+            val bgRes = when (status.lowercase()) {
+                "pending" -> R.drawable.status_pending_bg
+                "confirmed" -> R.drawable.status_confirmed_bg
+                "preparing" -> R.drawable.status_preparing_bg
+                "on_delivery", "out for delivery" -> R.drawable.status_on_delivery_bg
+                "ready" -> R.drawable.status_ready_bg
+                "delivered", "completed" -> R.drawable.status_completed_bg
+                "cancelled" -> R.drawable.status_cancelled_background
+                else -> R.drawable.status_pending_bg
+            }
+            textView.setBackgroundResource(bgRes)
+            textView.setTextColor(Color.WHITE)
+        } catch (e: Exception) {
+            Log.e("OrdersDebug", "Error setting status style: ${e.message}")
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // Manual parse fallback
+    // -------------------------------------------------------------------------
+
     private fun parseOrderManually(snapshot: DataSnapshot): Order {
         return Order(
             orderId = snapshot.child("orderId").getValue(String::class.java) ?: snapshot.key ?: "",
@@ -229,47 +240,27 @@ class OrdersActivity : AppCompatActivity() {
         )
     }
 
-    private fun setStatusStyle(textView: TextView, status: String) {
-        try {
-            when (status.lowercase()) {
-                "pending" -> {
-                    textView.setBackgroundResource(R.drawable.status_pending_background)
-                    textView.setTextColor(Color.WHITE)
-                }
-                "confirmed" -> {
-                    textView.setBackgroundResource(R.drawable.status_confirmed_background)
-                    textView.setTextColor(Color.WHITE)
-                }
-                "delivered", "completed" -> {
-                    textView.setBackgroundResource(R.drawable.status_delivered_background)
-                    textView.setTextColor(Color.WHITE)
-                }
-                "cancelled" -> {
-                    textView.setBackgroundResource(R.drawable.status_cancelled_background)
-                    textView.setTextColor(Color.WHITE)
-                }
-                else -> {
-                    textView.setBackgroundResource(R.drawable.status_pending_background)
-                    textView.setTextColor(Color.WHITE)
-                }
-            }
-        } catch (e: Exception) {
-            Log.e("OrdersDebug", "Error setting status style: ${e.message}")
-        }
-    }
+    // -------------------------------------------------------------------------
+    // State
+    // -------------------------------------------------------------------------
 
     private fun showEmptyState(message: String) {
-        tvEmptyState.text = message
+        val msgView = tvEmptyState.findViewById<TextView>(R.id.tvEmptyMessage)
+        msgView.text = message
+        tvEmptyState.findViewById<TextView>(R.id.tvEmptySubtitle).visibility = View.GONE
         tvEmptyState.visibility = View.VISIBLE
         ordersContainer.visibility = View.GONE
     }
+
+    // -------------------------------------------------------------------------
+    // Bottom Nav
+    // -------------------------------------------------------------------------
 
     private fun setupBottomNavigation() {
         val navMap = findViewById<LinearLayout>(R.id.navMap)
         val navOrders = findViewById<LinearLayout>(R.id.navOrder)
         val navProfile = findViewById<LinearLayout>(R.id.navProfile)
 
-        // Set Orders as active
         setActiveTab(navOrders)
 
         navMap.setOnClickListener {
@@ -278,7 +269,6 @@ class OrdersActivity : AppCompatActivity() {
         }
 
         navOrders.setOnClickListener {
-            // Reload orders
             loadUserOrders()
             setActiveTab(navOrders)
         }
@@ -305,12 +295,13 @@ class OrdersActivity : AppCompatActivity() {
             }
 
             if (tab == activeTab) {
-                textView?.setTextColor(Color.parseColor("#2196F3"))
-                tab.background = ContextCompat.getDrawable(this, R.drawable.tab_active_border)
+                textView?.setTextColor(Color.WHITE)
+                textView?.alpha = 1.0f
             } else {
-                textView?.setTextColor(Color.parseColor("#757575"))
-                tab.background = ContextCompat.getDrawable(this, R.drawable.tab_border_highlight)
+                textView?.setTextColor(ContextCompat.getColor(this, R.color.light_yellow))
+                textView?.alpha = 0.6f
             }
+            tab.background = null
         }
     }
 }
