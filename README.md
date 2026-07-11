@@ -213,6 +213,12 @@ app/src/main/
 
 1. Open in Android Studio
 2. Place `debug.keystore` at `%USERPROFILE%/AppData/Local/Temp/`
+
+## Recent Changes
+
+| Date | Commit | Changes |
+|------|--------|---------|
+| Jul 11 | `1685fac` | **Update footer email** — Changed footer contact email from `aquallera@gmail.com` to `aquallera.main@gmail.com` |
 3. Ensure `google-services.json` is in `app/` (Firebase)
 4. Add Mapbox token to `res/values/strings.xml`
 5. Build & run on device/emulator (API 24+)
