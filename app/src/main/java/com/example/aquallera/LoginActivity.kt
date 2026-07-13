@@ -1,16 +1,19 @@
 package com.example.aquallera
 
 import android.content.Intent
+import android.net.Uri
 import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
 import android.view.View
 import android.widget.Button
 import android.widget.EditText
+import android.widget.ImageView
 import android.widget.TextView
 import android.widget.Toast
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.database.DataSnapshot
 import com.google.firebase.database.DatabaseError
+import com.google.firebase.database.FirebaseDatabase
 import com.google.firebase.database.ValueEventListener
 
 class LoginActivity : AppCompatActivity() {
@@ -28,6 +31,12 @@ class LoginActivity : AppCompatActivity() {
         auth = FirebaseAuth.getInstance()
         initializeViews()
         setupClickListeners()
+
+        // Footer globe link
+        findViewById<ImageView>(R.id.GlobeIcon)?.setOnClickListener {
+            val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://aquallera-website.vercel.app/"))
+            startActivity(intent)
+        }
 
         // Check if user is already logged in
         checkExistingSession()
@@ -49,7 +58,6 @@ class LoginActivity : AppCompatActivity() {
             // User is already logged in, redirect to map
             val intent = Intent(this, MapActivity::class.java)
             startActivity(intent)
-            finish()
         }
     }
 
@@ -93,7 +101,51 @@ class LoginActivity : AppCompatActivity() {
                         loginError("User data not found.")
                     }
                 } else {
-                    loginError("User profile not found.")
+                    // Auto-provision user record if missing
+                    val userId = uid
+                    val database = FirebaseDatabase.getInstance("https://aquallera-default-rtdb.asia-southeast1.firebasedatabase.app")
+
+                    database.reference.child("waterStations").child(userId)
+                        .addListenerForSingleValueEvent(object : ValueEventListener {
+                            override fun onDataChange(stationSnapshot: DataSnapshot) {
+                                val userMap = if (stationSnapshot.exists()) {
+                                    val ownerName = stationSnapshot.child("ownerName").getValue(String::class.java) ?: ""
+                                    val email = stationSnapshot.child("email").getValue(String::class.java) ?: ""
+                                    val phone = stationSnapshot.child("phone").getValue(String::class.java) ?: ""
+                                    mapOf(
+                                        "uid" to userId,
+                                        "fullName" to ownerName,
+                                        "name" to ownerName,
+                                        "email" to email,
+                                        "number" to phone,
+                                        "createdAt" to System.currentTimeMillis()
+                                    )
+                                } else {
+                                    mapOf(
+                                        "uid" to userId,
+                                        "email" to (auth.currentUser?.email ?: ""),
+                                        "createdAt" to System.currentTimeMillis()
+                                    )
+                                }
+                                database.reference.child("users").child(userId).setValue(userMap)
+                                    .addOnSuccessListener {
+                                        val provisionedUser = User(
+                                            uid = userId,
+                                            fullName = userMap["fullName"] as? String ?: "",
+                                            email = userMap["email"] as? String ?: "",
+                                            number = userMap["number"] as? String ?: ""
+                                        )
+                                        loginSuccess(provisionedUser)
+                                    }
+                                    .addOnFailureListener {
+                                        loginError("Failed to create user profile.")
+                                    }
+                            }
+
+                            override fun onCancelled(error: DatabaseError) {
+                                loginError("Database error. Please try again.")
+                            }
+                        })
                 }
             }
 
@@ -110,7 +162,6 @@ class LoginActivity : AppCompatActivity() {
         Toast.makeText(this, "Login successful!", Toast.LENGTH_SHORT).show()
         val intent = Intent(this, MapActivity::class.java)
         startActivity(intent)
-        finish()
     }
 
     private fun loginError(errorMessage: String) {

@@ -75,19 +75,120 @@
                 android:layout_marginTop="4dp" />
         </LinearLayout>
 
-        <!-- Scrollable Order List -->
-        <ScrollView
+        <!-- List View: Filter Tabs + Orders + Pagination -->
+        <LinearLayout
+            android:id="@+id/listViewContainer"
             android:layout_width="match_parent"
-            android:layout_height="match_parent">
+            android:layout_height="match_parent"
+            android:orientation="vertical">
 
-            <LinearLayout
-                android:id="@+id/ordersContainer"
+            <!-- Filter Tabs -->
+            <HorizontalScrollView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:orientation="vertical"
-                android:padding="16dp" />
+                android:scrollbars="none"
+                android:paddingHorizontal="16dp"
+                android:paddingVertical="8dp"
+                android:layout_marginTop="8dp">
 
-        </ScrollView>
+                <LinearLayout
+                    android:id="@+id/filterTabsLayout"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal" />
+            </HorizontalScrollView>
+
+            <!-- Scrollable Order List -->
+            <ScrollView
+                android:id="@+id/ordersScrollView"
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_weight="1">
+
+                <LinearLayout
+                    android:id="@+id/ordersContainer"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:padding="16dp" />
+            </ScrollView>
+
+            <!-- Pagination Controls -->
+            <LinearLayout
+                android:id="@+id/paginationLayout"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center"
+                android:padding="8dp"
+                android:visibility="gone" />
+        </LinearLayout>
+
+        <!-- Detail View: Back Button + Order Details + Cancel -->
+        <LinearLayout
+            android:id="@+id/detailViewContainer"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:orientation="vertical"
+            android:visibility="gone">
+
+            <!-- Detail Header -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:paddingHorizontal="16dp"
+                android:paddingVertical="12dp">
+
+                <TextView
+                    android:id="@+id/btnBack"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="←"
+                    android:textSize="24sp"
+                    android:textColor="@color/midnight_blue"
+                    android:paddingEnd="12dp"
+                    android:clickable="true"
+                    android:focusable="true" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Order Details"
+                    android:textSize="18sp"
+                    android:textStyle="bold"
+                    android:textColor="@color/midnight_blue" />
+            </LinearLayout>
+
+            <!-- Detail Content -->
+            <ScrollView
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_weight="1"
+                android:paddingHorizontal="16dp">
+
+                <LinearLayout
+                    android:id="@+id/detailContent"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:paddingBottom="16dp" />
+            </ScrollView>
+
+            <!-- Cancel Button -->
+            <Button
+                android:id="@+id/btnCancelOrder"
+                android:layout_width="match_parent"
+                android:layout_height="48dp"
+                android:layout_marginHorizontal="16dp"
+                android:layout_marginBottom="16dp"
+                android:text="Cancel Order"
+                android:textSize="14sp"
+                android:textColor="@color/white"
+                android:backgroundTint="#E53935"
+                android:visibility="gone" />
+        </LinearLayout>
 
     </FrameLayout>
 

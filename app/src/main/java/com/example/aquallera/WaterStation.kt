@@ -31,13 +31,16 @@ data class WaterStation(
     @PropertyName("pricing_gallon_pure") val pricing_gallon_pure: Double? = null,
     @PropertyName("pricing_liter_spring") val pricing_liter_spring: Double? = null,
     @PropertyName("pricing_gallon_mineral") val pricing_gallon_mineral: Double? = null,
+    @PropertyName("pricing_gallon_spring") val pricing_gallon_spring: Double? = null,
     @PropertyName("pricing_delivery_fee") val pricing_delivery_fee: Double? = null,
 
     @PropertyName("deliveryRadius") val deliveryRadius: Int = 5,
     @PropertyName("deliveryHours") val deliveryHours: List<String>? = null,
     @PropertyName("businessHours") val businessHours: Map<String, String> = emptyMap(),
     @PropertyName("serviceTypes") val serviceTypes: List<String> = emptyList(),
+    @PropertyName("deliveryDays") val deliveryDays: List<String>? = null,
     @PropertyName("about") val about: String = "",
+    @PropertyName("revokedAt") val revokedAt: Long? = null,
     @PropertyName("createdAt") val createdAt: String = "",
     @PropertyName("updatedAt") val updatedAt: String = "",
 

@@ -69,9 +69,22 @@ class EditProfileActivity : AppCompatActivity() {
         database.child("users").child(currentUser.uid)
             .addListenerForSingleValueEvent(object : ValueEventListener {
                 override fun onDataChange(dataSnapshot: DataSnapshot) {
-                    val user = dataSnapshot.getValue(User::class.java)
-                    if (user != null) {
-                        populateEditFields(user)
+                    if (dataSnapshot.exists()) {
+                        val userName = when {
+                            dataSnapshot.hasChild("name") -> dataSnapshot.child("name").getValue(String::class.java) ?: ""
+                            dataSnapshot.hasChild("fullName") -> dataSnapshot.child("fullName").getValue(String::class.java) ?: ""
+                            else -> ""
+                        }
+                        val userEmail = dataSnapshot.child("email").getValue(String::class.java) ?: ""
+                        val userNumber = when {
+                            dataSnapshot.hasChild("number") -> dataSnapshot.child("number").getValue(String::class.java) ?: ""
+                            dataSnapshot.hasChild("phone") -> dataSnapshot.child("phone").getValue(String::class.java) ?: ""
+                            else -> ""
+                        }
+                        etFullName.setText(userName)
+                        etEmail.setText(userEmail)
+                        etNumber.setText(userNumber)
+                        originalEmail = userEmail
                     } else {
                         etFullName.setText(currentUser.displayName ?: "")
                         etEmail.setText(currentUser.email ?: "")
@@ -85,13 +98,6 @@ class EditProfileActivity : AppCompatActivity() {
                     originalEmail = currentUser.email ?: ""
                 }
             })
-    }
-
-    private fun populateEditFields(user: User) {
-        etFullName.setText(user.fullName)
-        etEmail.setText(user.email)
-        etNumber.setText(user.number)
-        originalEmail = user.email
     }
 
     private fun validateInputs(): Boolean {
@@ -136,7 +142,7 @@ class EditProfileActivity : AppCompatActivity() {
         val userRef = database.child("users").child(currentUserKey)
 
         val updatedUser = mapOf(
-            "fullName" to fullName,
+            "name" to fullName,
             "email" to email,
             "number" to number
         )

@@ -5,9 +5,12 @@ import java.io.Serializable
 
 data class Order(
     val orderId: String = "",
+    val referenceNumber: String = "",
     val stationId: String = "",
     val stationName: String = "",
     val customerId: String = "",
+    val userId: String = "",
+    val userEmail: String = "",
     val customerName: String = "",
     val customerPhone: String = "",
     val orderType: String = "", // "Delivery" or "Pickup"
@@ -34,5 +37,5 @@ data class Order(
     val paymentMethod: String = "Cash on Delivery",
     val status: String = "Pending", // Pending, Confirmed, Completed, Cancelled
     val createdAt: Long = System.currentTimeMillis(),
-    val referenceNumber: String = "" // Added this field
+    val updatedAt: String = ""
 ) : Serializable

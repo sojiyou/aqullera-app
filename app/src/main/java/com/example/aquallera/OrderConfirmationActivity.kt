@@ -7,6 +7,8 @@ import android.util.Log
 import android.view.View
 import android.widget.*
 import androidx.appcompat.app.AppCompatActivity
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.launch
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.database.*
 import java.text.SimpleDateFormat
@@ -207,6 +209,8 @@ class OrderConfirmationActivity : AppCompatActivity() {
                     transactionFee
             tvGrandTotal.text = "₱${String.format("%.2f", grandTotal)}"
 
+            findViewById<TextView>(R.id.tvPaymentMethod)?.text = "Payment Method: Cash on Delivery"
+
             if (additionalDetails.isNotEmpty()) {
                 tvAdditionalDetails.text = additionalDetails
                 layoutNotes.visibility = View.VISIBLE
@@ -305,8 +309,8 @@ class OrderConfirmationActivity : AppCompatActivity() {
     }
 
     private fun createOrderObject(customerId: String, orderId: String): Order {
-        val currentUser = auth.currentUser
-        val customerName = currentUser?.displayName ?: "Customer"
+        val user = auth.currentUser
+        val customerName = user?.displayName ?: "Customer"
 
         val grandTotal = orderTotal.waterSubtotal +
                 (if (orderType == "Delivery") orderTotal.deliveryFee else 0.0) +
@@ -323,6 +327,8 @@ class OrderConfirmationActivity : AppCompatActivity() {
             stationId = currentStation?.id ?: "",
             stationName = currentStation?.stationName ?: "",
             customerId = customerId,
+            userId = customerId,
+            userEmail = user?.email ?: "",
             customerName = customerName,
             customerPhone = customerPhone,
             orderType = orderType,
@@ -347,8 +353,9 @@ class OrderConfirmationActivity : AppCompatActivity() {
             deliveryLongitude = if (orderType == "Delivery") userLongitude else 0.0,
             additionalDetails = additionalDetails,
             paymentMethod = "Cash on Delivery",
-            status = "Pending",
+            status = "pending",
             createdAt = System.currentTimeMillis(),
+            updatedAt = java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", java.util.Locale.US).format(java.util.Date()),
             referenceNumber = referenceNumber
         )
     }
@@ -373,7 +380,27 @@ class OrderConfirmationActivity : AppCompatActivity() {
 
                 database.reference.child("orders").child(orderId)
                     .setValue(order)
-                    .addOnSuccessListener { navigateToOrderSuccess(order) }
+                    .addOnSuccessListener {
+                        // Send confirmation email (fire-and-forget, catch silently)
+                        lifecycleScope.launch {
+                            try {
+                                EmailService.sendOrderConfirmation(
+                                    toEmail = currentUser.email ?: "",
+                                    customerName = order.customerName,
+                                    stationName = order.stationName,
+                                    orderType = order.orderType,
+                                    orderDate = order.date,
+                                    orderTime = order.time,
+                                    referenceNumber = order.referenceNumber,
+                                    total = String.format("%.2f", order.grandTotal),
+                                    status = order.status
+                                )
+                            } catch (e: Exception) {
+                                // Email failure does not block order placement
+                            }
+                        }
+                        navigateToOrderSuccess(order)
+                    }
                     .addOnFailureListener { e ->
                         Toast.makeText(this, "Failed to save order: ${e.message}", Toast.LENGTH_SHORT).show()
                         btnConfirmOrder.isEnabled = true

@@ -1,11 +1,13 @@
 package com.example.aquallera
 
 import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
 import android.util.Log
 import android.view.View
 import android.widget.Button
 import android.widget.EditText
+import android.widget.ImageView
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
@@ -33,6 +35,12 @@ class SignupActivity : AppCompatActivity() {
         auth = FirebaseAuth.getInstance()
         initializeViews()
         setupClickListeners()
+
+        // Footer globe link
+        findViewById<ImageView>(R.id.GlobeIcon)?.setOnClickListener {
+            val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://aquallera-website.vercel.app/"))
+            startActivity(intent)
+        }
     }
 
     private fun initializeViews() {
@@ -90,8 +98,8 @@ class SignupActivity : AppCompatActivity() {
                     if (dataSnapshot.exists()) {
                         signupError("Phone number already registered. Please use a different number.")
                     } else {
-                        // Phone number available, create user with Firebase Auth
-                        createUserWithFirebaseAuth(email, fullName, number, password)
+                        // Phone number available, check email duplicates
+                        checkEmailDuplicates(email, fullName, number, password)
                     }
                 }
 
@@ -101,7 +109,45 @@ class SignupActivity : AppCompatActivity() {
             })
     }
 
-    private fun createUserWithFirebaseAuth(email: String, fullName: String, number: String, password: String) {
+    private fun checkEmailDuplicates(email: String, fullName: String, number: String, password: String) {
+        val database = FirebaseConfig.getDatabaseReference()
+
+        // Check if email is already used by a water station owner
+        database.child("waterStations").orderByChild("email").equalTo(email)
+            .addListenerForSingleValueEvent(object : ValueEventListener {
+                override fun onDataChange(snapshot: DataSnapshot) {
+                    if (snapshot.exists()) {
+                        Toast.makeText(this@SignupActivity, "This email is already registered", Toast.LENGTH_SHORT).show()
+                        btnSignup.isEnabled = true
+                        btnSignup.text = "Sign Up"
+                        return
+                    }
+                    // Also check users email
+                    database.child("users").orderByChild("email").equalTo(email)
+                        .addListenerForSingleValueEvent(object : ValueEventListener {
+                            override fun onDataChange(snapshot: DataSnapshot) {
+                                if (snapshot.exists()) {
+                                    Toast.makeText(this@SignupActivity, "This email is already registered", Toast.LENGTH_SHORT).show()
+                                    btnSignup.isEnabled = true
+                                    btnSignup.text = "Sign Up"
+                                    return
+                                }
+                                // All checks passed - proceed with creating account
+                                createFirebaseAccount(fullName, email, password, number)
+                            }
+                            override fun onCancelled(error: DatabaseError) {
+                                createFirebaseAccount(fullName, email, password, number)
+                            }
+                        })
+                }
+                override fun onCancelled(error: DatabaseError) {
+                    // Proceed with signup if check fails
+                    createFirebaseAccount(fullName, email, password, number)
+                }
+            })
+    }
+
+    private fun createFirebaseAccount(fullName: String, email: String, password: String, number: String) {
         auth.createUserWithEmailAndPassword(email, password)
             .addOnCompleteListener { task ->
                 if (task.isSuccessful) {
@@ -114,6 +160,14 @@ class SignupActivity : AppCompatActivity() {
                         firebaseUser.updateProfile(profileUpdates)
                             .addOnCompleteListener { profileTask ->
                                 if (profileTask.isSuccessful) {
+                                    // Send verification email
+                                    firebaseUser.sendEmailVerification().addOnCompleteListener { verifyTask ->
+                                        if (verifyTask.isSuccessful) {
+                                            Log.d("Signup", "Verification email sent")
+                                        } else {
+                                            Log.e("Signup", "Failed to send verification email: ${verifyTask.exception?.message}")
+                                        }
+                                    }
                                     // Save user data to database
                                     saveUserToDatabase(firebaseUser.uid, fullName, email, number)
                                 } else {
@@ -152,7 +206,8 @@ class SignupActivity : AppCompatActivity() {
         btnSignup.text = "Sign Up"
         Toast.makeText(this, "Account created successfully!", Toast.LENGTH_SHORT).show()
 
-        val intent = Intent(this, MapActivity::class.java)
+        val intent = Intent(this, VerifyEmailActivity::class.java)
+        intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
         startActivity(intent)
         finish()
     }

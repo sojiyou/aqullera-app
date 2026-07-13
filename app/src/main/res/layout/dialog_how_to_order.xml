@@ -95,7 +95,7 @@
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="Tap the blue 'Order Now' button on your chosen station card."
+                android:text="Tap the 'Order Now' button on your chosen station card."
                 android:textSize="14sp"
                 android:textColor="@color/white"
                 android:layout_marginTop="4dp" />

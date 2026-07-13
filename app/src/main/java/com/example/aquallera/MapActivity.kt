@@ -16,6 +16,9 @@ import android.widget.Button
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
+import android.widget.AdapterView
+import android.widget.ArrayAdapter
+import android.widget.Spinner
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
@@ -58,6 +61,10 @@ class MapActivity : AppCompatActivity() {
     private var selectedStation: WaterStation? = null
     private lateinit var stationAdapter: WaterStationAdapter
     private val stationsList = mutableListOf<WaterStation>()
+    private var allStationsList = mutableListOf<WaterStation>()
+    private var currentFilter = "all"
+
+    private var notificationListener: NotificationListener? = null
 
     private lateinit var fusedLocationClient: FusedLocationProviderClient
     private var userLocation: Location? = null
@@ -85,7 +92,7 @@ class MapActivity : AppCompatActivity() {
             Point.fromLngLat(120.5200, 16.3600),
             Point.fromLngLat(120.6700, 16.4600)
         )
-        private val BAGUIO_CENTER = Point.fromLngLat(120.5931, 16.4164)
+        private val BAGUIO_CENTER = Point.fromLngLat(120.593, 16.412)
     }
 
     data class MarkerData(
@@ -110,6 +117,9 @@ class MapActivity : AppCompatActivity() {
         setupBottomNavigation()
         setupBottomSheet()
         getUserLocation()
+
+        notificationListener = NotificationListener(this)
+        notificationListener?.start()
     }
 
     override fun onStart() {
@@ -129,6 +139,7 @@ class MapActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
+        notificationListener?.stop()
         mapView.onDestroy()
     }
 
@@ -151,6 +162,19 @@ class MapActivity : AppCompatActivity() {
         emptyState = findViewById(R.id.emptyState)
 
         selectedStationCard.visibility = View.GONE
+
+        val spinnerStatusFilter = findViewById<Spinner>(R.id.spinnerStatusFilter)
+        val filterOptions = arrayOf("All", "Online", "Offline", "Pending")
+        val filterValues = arrayOf("all", "online", "offline", "pending")
+        val filterAdapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, filterOptions)
+        spinnerStatusFilter.adapter = filterAdapter
+        spinnerStatusFilter.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
+                currentFilter = filterValues[position]
+                applyFilter()
+            }
+            override fun onNothingSelected(parent: AdapterView<*>?) {}
+        }
     }
 
     private fun setupRecyclerView() {
@@ -346,13 +370,15 @@ class MapActivity : AppCompatActivity() {
                 if (location != null) {
                     userLocation = location
                     stationAdapter.updateUserLocation(location)
-                    mapView.getMapboxMap().setCamera(
-                        CameraOptions.Builder()
-                            .center(Point.fromLngLat(location.longitude, location.latitude))
-                            .zoom(15.0)
-                            .build()
-                    )
                     Toast.makeText(this, "Finding your location...", Toast.LENGTH_SHORT).show()
+                    android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+                        mapView.getMapboxMap().setCamera(
+                            CameraOptions.Builder()
+                                .center(Point.fromLngLat(location.longitude, location.latitude))
+                                .zoom(14.0)
+                                .build()
+                        )
+                    }, 2000)
                 } else {
                     Toast.makeText(this, "Unable to get current location", Toast.LENGTH_SHORT).show()
                 }
@@ -406,18 +432,15 @@ class MapActivity : AppCompatActivity() {
     // Map markers
     // -------------------------------------------------------------------------
 
-    private fun iconSizeForZoom(zoom: Double) = when {
-        zoom < 10 -> 0.5
-        zoom < 12 -> 0.8
-        zoom < 14 -> 1.0
-        zoom < 16 -> 1.2
-        else -> 1.5
+    private fun iconSizeForZoom(zoom: Double): Double {
+        val sizePx = maxOf(16.0, minOf(48.0, 20.0 + (zoom - 10.0) * 4.0))
+        return sizePx / 32.0
     }
 
     private fun textSizeForZoom(zoom: Double) = when {
-        zoom < 11 -> 0.0
-        zoom < 13 -> 8.0
-        zoom < 15 -> 10.0
+        zoom < 13 -> 0.0
+        zoom < 15 -> 8.0
+        zoom < 17 -> 10.0
         else -> 12.0
     }
 
@@ -508,26 +531,20 @@ class MapActivity : AppCompatActivity() {
 
         waterStationsRef.addValueEventListener(object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
-                stationsList.clear()
-                markerDataList.clear()
-                pointAnnotationManager?.deleteAll()
-                pointAnnotationManager = null
-
+                allStationsList.clear()
                 if (snapshot.exists()) {
                     for (child in snapshot.children) {
                         val id = child.key ?: continue
                         val station = child.getValue(WaterStation::class.java)?.copy(id = id) ?: continue
-                        stationsList.add(station)
-                        addWaterStationMarker(station)
+                        allStationsList.add(station)
                     }
-                    updateMarkerSizes()
                 }
 
-                val hasStations = stationsList.isNotEmpty()
+                val hasStations = allStationsList.isNotEmpty()
                 emptyState.visibility = if (hasStations) View.GONE else View.VISIBLE
                 recyclerViewStations.visibility = if (hasStations) View.VISIBLE else View.GONE
 
-                stationAdapter.updateStations(stationsList)
+                applyFilter()
             }
 
             override fun onCancelled(error: DatabaseError) {
@@ -540,6 +557,25 @@ class MapActivity : AppCompatActivity() {
                 ).show()
             }
         })
+    }
+
+    private fun applyFilter() {
+        val filtered = allStationsList.filter { station ->
+            when (currentFilter) {
+                "all" -> true
+                "online" -> station.status == "approved" && station.isOnline
+                "offline" -> station.status == "approved" && !station.isOnline
+                "pending" -> station.status != "approved"
+                else -> true
+            }
+        }
+        stationAdapter.updateStations(filtered)
+
+        markerDataList.clear()
+        pointAnnotationManager?.deleteAll()
+        pointAnnotationManager = null
+        filtered.forEach { addWaterStationMarker(it) }
+        updateMarkerSizes()
     }
 
     // -------------------------------------------------------------------------

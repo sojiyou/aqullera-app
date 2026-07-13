@@ -80,7 +80,7 @@ class WaterStationAdapter(
 
         // ✅ Handle nullable pricing with safe defaults
         holder.tvPurePrice.text = "₱${String.format("%.2f", station.pricing_gallon_pure ?: 0.0)}"
-        holder.tvSpringPrice.text = "₱${String.format("%.2f", station.pricing_liter_spring ?: 0.0)}"
+        holder.tvSpringPrice.text = "₱${String.format("%.2f", station.pricing_liter_spring ?: station.pricing_gallon_spring ?: 0.0)}"
         holder.tvMineralPrice.text = "₱${String.format("%.2f", station.pricing_gallon_mineral ?: 0.0)}"
 
         // View on Map button

@@ -183,16 +183,32 @@
                     android:layout_gravity="center" />
             </LinearLayout>
 
-            <!-- Title -->
-            <TextView
+            <!-- Title Row -->
+            <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
                 android:paddingHorizontal="16dp"
-                android:paddingBottom="12dp"
-                android:text="💧 All Water Stations"
-                android:textSize="14sp"
-                android:textStyle="bold"
-                android:textColor="@color/midnight_blue" />
+                android:paddingBottom="12dp">
+
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="All Water Stations"
+                    android:textSize="14sp"
+                    android:textStyle="bold"
+                    android:textColor="@color/midnight_blue" />
+
+                <Spinner
+                    android:id="@+id/spinnerStatusFilter"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="end"
+                    android:background="@android:drawable/btn_dropdown"
+                    android:popupBackground="@android:color/white" />
+            </LinearLayout>
 
             <!-- Station List -->
             <androidx.recyclerview.widget.RecyclerView

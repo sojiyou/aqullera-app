@@ -28,6 +28,9 @@ class StoreDetailsActivity : AppCompatActivity() {
     private lateinit var tvMineralPrice: TextView
     private lateinit var aboutCard: LinearLayout
     private lateinit var tvAbout: TextView
+    private lateinit var tvOnlineStatus: TextView
+    private lateinit var deliveryDaysCard: LinearLayout
+    private lateinit var chipGroupDeliveryDays: com.google.android.material.chip.ChipGroup
 
     private var currentStation: WaterStation? = null
 
@@ -68,6 +71,9 @@ class StoreDetailsActivity : AppCompatActivity() {
         tvMineralPrice = findViewById(R.id.tvMineralPrice)
         aboutCard = findViewById(R.id.aboutCard)
         tvAbout = findViewById(R.id.tvAbout)
+        tvOnlineStatus = findViewById(R.id.tvOnlineStatus)
+        deliveryDaysCard = findViewById(R.id.deliveryDaysCard)
+        chipGroupDeliveryDays = findViewById(R.id.chipGroupDeliveryDays)
     }
 
     private fun displayStationDetails(station: WaterStation) {
@@ -85,6 +91,7 @@ class StoreDetailsActivity : AppCompatActivity() {
         displayBusinessHours(station)
         displayServices(station)
         displayDeliveryHours(station)
+        displayDeliveryDays(station)
         displayPrices(station)
         displayAbout(station)
     }
@@ -101,6 +108,21 @@ class StoreDetailsActivity : AppCompatActivity() {
             if (isApproved) R.drawable.status_completed_bg else R.drawable.status_preparing_bg
         )
         badgesContainer.addView(statusBadge)
+
+        // Online/Offline badge
+        val isOnline = station.isOnline
+        if (isApproved) {
+            tvOnlineStatus.visibility = View.VISIBLE
+            if (isOnline) {
+                tvOnlineStatus.text = "● Online"
+                tvOnlineStatus.setTextColor(resources.getColor(android.R.color.holo_green_dark, null))
+            } else {
+                tvOnlineStatus.text = "● Offline"
+                tvOnlineStatus.setTextColor(resources.getColor(android.R.color.holo_orange_dark, null))
+            }
+        } else {
+            tvOnlineStatus.visibility = View.GONE
+        }
     }
 
     private fun displayBusinessHours(station: WaterStation) {
@@ -198,9 +220,32 @@ class StoreDetailsActivity : AppCompatActivity() {
         }
     }
 
+    private fun displayDeliveryDays(station: WaterStation) {
+        val deliveryDays = station.deliveryDays
+        if (station.serviceTypes.contains("delivery") && !deliveryDays.isNullOrEmpty()) {
+            deliveryDaysCard.visibility = View.VISIBLE
+            chipGroupDeliveryDays.removeAllViews()
+            val dayLabels = mapOf(
+                "monday" to "Mon", "tuesday" to "Tue", "wednesday" to "Wed",
+                "thursday" to "Thu", "friday" to "Fri", "saturday" to "Sat", "sunday" to "Sun"
+            )
+            deliveryDays.forEach { day ->
+                val chip = com.google.android.material.chip.Chip(this).apply {
+                    text = dayLabels[day.lowercase()] ?: day.take(3).capitalize()
+                    isClickable = false
+                    setChipBackgroundColorResource(R.color.midnight_blue)
+                    setTextColor(resources.getColor(android.R.color.white, null))
+                }
+                chipGroupDeliveryDays.addView(chip)
+            }
+        } else {
+            deliveryDaysCard.visibility = View.GONE
+        }
+    }
+
     private fun displayPrices(station: WaterStation) {
         val purePrice = station.pricing_gallon_pure
-        val springPrice = station.pricing_liter_spring
+        val springPrice = station.pricing_liter_spring ?: station.pricing_gallon_spring
         val mineralPrice = station.pricing_gallon_mineral
 
         tvPurePrice.text = if (purePrice != null) "₱${String.format("%.2f", purePrice)}" else "—"

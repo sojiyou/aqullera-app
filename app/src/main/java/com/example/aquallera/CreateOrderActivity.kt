@@ -2,6 +2,7 @@ package com.example.aquallera
 
 import android.app.DatePickerDialog
 import android.content.Intent
+import androidx.appcompat.app.AlertDialog
 import android.content.pm.PackageManager
 import android.graphics.Color
 import android.location.Location
@@ -278,11 +279,25 @@ class CreateOrderActivity : AppCompatActivity() {
             pureWaterPrice = station.pricing_gallon_pure ?: 0.0
             springWaterPrice = station.pricing_liter_spring ?: 0.0
             mineralWaterPrice = station.pricing_gallon_mineral ?: 0.0
-            deliveryFee = station.pricing_delivery_fee ?: 0.0
+            deliveryFee = station.pricing_delivery_fee ?: 50.0
 
             tvPureWaterPrice.text = "₱${String.format("%.2f", pureWaterPrice)} / gallon"
             tvSpringWaterPrice.text = "₱${String.format("%.2f", springWaterPrice)} / liter"
             tvMineralWaterPrice.text = "₱${String.format("%.2f", mineralWaterPrice)} / gallon"
+
+            if (isDelivery && !station.deliveryDays.isNullOrEmpty()) {
+                val availableDates = getAvailableDeliveryDates()
+                val todayStr = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Calendar.getInstance().time)
+                if (availableDates.isNotEmpty() && (selectedDate.isEmpty() || selectedDate == todayStr)) {
+                    selectedDate = availableDates[0]
+                    val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.US)
+                    val displaySdf = SimpleDateFormat("MMMM dd, yyyy", Locale.US)
+                    try {
+                        val date = sdf.parse(selectedDate)
+                        if (date != null) tvSelectedDate.text = displaySdf.format(date)
+                    } catch (e: Exception) {}
+                }
+            }
         }
     }
 
@@ -315,7 +330,12 @@ class CreateOrderActivity : AppCompatActivity() {
             btnDelivery.background = ContextCompat.getDrawable(this, R.drawable.toggle_btn_inactive)
             btnDelivery.setTextColor(Color.parseColor("#666666"))
             addressCard.visibility = View.GONE
-            timeSlotsCard.visibility = View.GONE
+            if (selectedDate.isNotEmpty() && currentStation?.businessHours?.isNotEmpty() == true) {
+                timeSlotsCard.visibility = View.VISIBLE
+                updateTimeSlots()
+            } else {
+                timeSlotsCard.visibility = View.GONE
+            }
         }
     }
 
@@ -325,13 +345,17 @@ class CreateOrderActivity : AppCompatActivity() {
 
     private fun setupDateSelection() {
         val calendar = Calendar.getInstance()
-        val dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale.getDefault())
-        selectedDate = dateFormat.format(calendar.time)
-        tvSelectedDate.text = selectedDate
+        val internalFormat = SimpleDateFormat("yyyy-MM-dd", Locale.US)
+        val displayFormat = SimpleDateFormat("MMMM dd, yyyy", Locale.US)
+        selectedDate = internalFormat.format(calendar.time)
+        tvSelectedDate.text = displayFormat.format(calendar.time)
 
-        tvSelectedDate.setOnClickListener { showDatePickerDialog() }
-        if (currentStation?.deliveryHours?.isNotEmpty() == true) {
-            updateTimeSlots()
+        tvSelectedDate.setOnClickListener {
+            if (isDelivery && !currentStation?.deliveryDays.isNullOrEmpty()) {
+                showDeliveryDateDropdown()
+            } else {
+                showDatePickerDialog()
+            }
         }
     }
 
@@ -346,9 +370,10 @@ class CreateOrderActivity : AppCompatActivity() {
             { _, selectedYear, selectedMonth, selectedDay ->
                 val cal = Calendar.getInstance()
                 cal.set(selectedYear, selectedMonth, selectedDay)
-                val dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale.getDefault())
-                selectedDate = dateFormat.format(cal.time)
-                tvSelectedDate.text = selectedDate
+                val internalFormat = SimpleDateFormat("yyyy-MM-dd", Locale.US)
+                val displayFormat = SimpleDateFormat("MMMM dd, yyyy", Locale.US)
+                selectedDate = internalFormat.format(cal.time)
+                tvSelectedDate.text = displayFormat.format(cal.time)
                 selectedTime = ""
                 updateTimeSlots()
             },
@@ -360,66 +385,273 @@ class CreateOrderActivity : AppCompatActivity() {
     }
 
     // -------------------------------------------------------------------------
+    // Delivery Days Filtering
+    // -------------------------------------------------------------------------
+
+    private fun getAvailableDeliveryDates(): List<String> {
+        val deliveryDays = currentStation?.deliveryDays ?: return emptyList()
+        if (deliveryDays.isEmpty()) return emptyList()
+
+        val dayNames = listOf("sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday")
+        val results = mutableListOf<String>()
+        val calendar = Calendar.getInstance()
+
+        for (i in 0 until 30) {
+            if (results.size >= 14) break
+            val dayName = dayNames[calendar.get(Calendar.DAY_OF_WEEK) - 1]
+            if (deliveryDays.contains(dayName)) {
+                val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.US)
+                results.add(sdf.format(calendar.time))
+            }
+            calendar.add(Calendar.DAY_OF_MONTH, 1)
+        }
+        return results
+    }
+
+    private fun showDeliveryDateDropdown() {
+        val dates = getAvailableDeliveryDates()
+        if (dates.isEmpty()) {
+            showDatePickerDialog()
+            return
+        }
+
+        val displayDates = dates.map { dateStr ->
+            val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.US)
+            val displaySdf = SimpleDateFormat("EEE, MMM d", Locale.US)
+            try {
+                val date = sdf.parse(dateStr)
+                if (date != null) displaySdf.format(date) else dateStr
+            } catch (e: Exception) {
+                dateStr
+            }
+        }.toTypedArray()
+
+        val currentIndex = dates.indexOf(selectedDate).coerceAtLeast(0)
+
+        AlertDialog.Builder(this)
+            .setTitle("Select Delivery Date")
+            .setSingleChoiceItems(displayDates, currentIndex) { dialog, which ->
+                selectedDate = dates[which]
+                val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.US)
+                val displaySdf = SimpleDateFormat("MMMM dd, yyyy", Locale.US)
+                try {
+                    val date = sdf.parse(selectedDate)
+                    if (date != null) tvSelectedDate.text = displaySdf.format(date)
+                } catch (e: Exception) {
+                    tvSelectedDate.text = selectedDate
+                }
+                selectedTime = ""
+                updateTimeSlots()
+                dialog.dismiss()
+            }
+            .show()
+    }
+
+    // -------------------------------------------------------------------------
+    // Pickup Time Slots
+    // -------------------------------------------------------------------------
+
+    private fun generatePickupTimeSlots(): List<Pair<String, String>> {
+        val slots = mutableListOf<Pair<String, String>>()
+        val businessHours = currentStation?.businessHours ?: return slots
+
+        val dayMap = listOf("Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday")
+        val calendar = Calendar.getInstance()
+        if (selectedDate.isNotEmpty()) {
+            try {
+                val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.US)
+                val date = sdf.parse(selectedDate)
+                if (date != null) {
+                    calendar.time = date
+                }
+            } catch (e: Exception) {}
+        }
+        val dayName = dayMap[calendar.get(Calendar.DAY_OF_WEEK) - 1]
+
+        val hoursStr = businessHours[dayName] ?: ""
+        var openH = 6; var openM = 0; var closeH = 21; var closeM = 0
+
+        if (hoursStr.contains(" - ")) {
+            val parts = hoursStr.split(" - ")
+            val openTime = parseTime12h(parts.getOrNull(0) ?: "")
+            val closeTime = parseTime12h(parts.getOrNull(1) ?: "")
+            if (openTime != null) { openH = openTime.first; openM = openTime.second }
+            if (closeTime != null) { closeH = closeTime.first; closeM = closeTime.second }
+        } else if (businessHours.containsKey("open")) {
+            val openStr = businessHours["open"] ?: ""
+            val closeStr = businessHours["close"] ?: ""
+            val openTime = parseTime24h(openStr)
+            val closeTime = parseTime24h(closeStr)
+            if (openTime != null) { openH = openTime.first; openM = openTime.second }
+            if (closeTime != null) { closeH = closeTime.first; closeM = closeTime.second }
+        }
+
+        var h = openH; var m = openM
+        while (h < closeH || (h == closeH && m < closeM)) {
+            val value = String.format("%02d:%02d", h, m)
+            val hour12 = when { h == 0 -> 12; h > 12 -> h - 12; else -> h }
+            val period = if (h < 12) "AM" else "PM"
+            val display = String.format("%d:%02d %s", hour12, m, period)
+            slots.add(Pair(display, value))
+            m += 30
+            if (m >= 60) { h++; m = 0 }
+        }
+        return slots
+    }
+
+    private fun parseTime12h(timeStr: String): Pair<Int, Int>? {
+        try {
+            val cleaned = timeStr.trim()
+            val parts = cleaned.split(":")
+            if (parts.size < 2) return null
+            var hour = parts[0].toIntOrNull() ?: return null
+            val minStr = parts[1].replace(Regex("[^0-9]"), "")
+            val min = minStr.toIntOrNull() ?: 0
+            val isPM = cleaned.uppercase().contains("PM")
+            val isAM = cleaned.uppercase().contains("AM")
+            if (isPM && hour != 12) hour += 12
+            if (isAM && hour == 12) hour = 0
+            return Pair(hour, min)
+        } catch (e: Exception) { return null }
+    }
+
+    private fun parseTime24h(timeStr: String): Pair<Int, Int>? {
+        try {
+            val parts = timeStr.trim().split(":")
+            if (parts.size < 2) return null
+            return Pair(parts[0].toIntOrNull() ?: 0, parts[1].toIntOrNull() ?: 0)
+        } catch (e: Exception) { return null }
+    }
+
+    // -------------------------------------------------------------------------
     // Time Slots
     // -------------------------------------------------------------------------
 
     private fun updateTimeSlots() {
         timeSlotsContainer.removeAllViews()
-        val hours = currentStation?.deliveryHours ?: emptyList()
-        if (hours.isEmpty() || !isDelivery) {
-            timeSlotsCard.visibility = View.GONE
-            return
-        }
-        timeSlotsCard.visibility = View.VISIBLE
 
-        var currentRow: LinearLayout? = null
-        var countInRow = 0
+        if (isDelivery) {
+            val hours = currentStation?.deliveryHours ?: emptyList()
+            if (hours.isEmpty()) {
+                timeSlotsCard.visibility = View.GONE
+                return
+            }
+            timeSlotsCard.visibility = View.VISIBLE
+            updateTimeSlotsTitle("🚚 Delivery Time", "Select a delivery time slot")
 
-        hours.forEachIndexed { index, time ->
-            if (countInRow == 0) {
-                currentRow = LinearLayout(this).apply {
-                    orientation = LinearLayout.HORIZONTAL
-                    layoutParams = LinearLayout.LayoutParams(
-                        LinearLayout.LayoutParams.MATCH_PARENT,
-                        LinearLayout.LayoutParams.WRAP_CONTENT
-                    )
+            var currentRow: LinearLayout? = null
+            var countInRow = 0
+
+            hours.forEachIndexed { index, time ->
+                if (countInRow == 0) {
+                    currentRow = LinearLayout(this).apply {
+                        orientation = LinearLayout.HORIZONTAL
+                        layoutParams = LinearLayout.LayoutParams(
+                            LinearLayout.LayoutParams.MATCH_PARENT,
+                            LinearLayout.LayoutParams.WRAP_CONTENT
+                        )
+                    }
+                }
+
+                val btn = Button(this)
+                val displayTime = formatTimeSlot(time)
+                btn.text = displayTime
+                btn.textSize = 12f
+                btn.setTypeface(btn.typeface, android.graphics.Typeface.BOLD)
+                btn.minWidth = 0
+                btn.minHeight = 0
+                btn.setPadding(16, 10, 16, 10)
+                btn.layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.WRAP_CONTENT,
+                    36.dpToPx()
+                ).apply {
+                    setMargins(0, 0, 8.dpToPx(), 8.dpToPx())
+                }
+                btn.setBackgroundResource(R.drawable.toggle_btn_inactive)
+                btn.setTextColor(Color.parseColor("#666666"))
+
+                btn.setOnClickListener {
+                    selectedTime = time
+                    updateTimeSlotSelection()
+                }
+
+                currentRow?.addView(btn)
+                countInRow++
+
+                if (countInRow >= 3 || index == hours.size - 1) {
+                    currentRow?.let { timeSlotsContainer.addView(it) }
+                    countInRow = 0
                 }
             }
 
-            val btn = Button(this)
-            val displayTime = formatTimeSlot(time)
-            btn.text = displayTime
-            btn.textSize = 12f
-            btn.setTypeface(btn.typeface, android.graphics.Typeface.BOLD)
-            btn.minWidth = 0
-            btn.minHeight = 0
-            btn.setPadding(16, 10, 16, 10)
-            btn.layoutParams = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.WRAP_CONTENT,
-                36.dpToPx()
-            ).apply {
-                setMargins(0, 0, 8.dpToPx(), 8.dpToPx())
-            }
-            btn.setBackgroundResource(R.drawable.toggle_btn_inactive)
-            btn.setTextColor(Color.parseColor("#666666"))
-
-            btn.setOnClickListener {
-                selectedTime = time
+            if (selectedTime.isNotEmpty()) {
                 updateTimeSlotSelection()
             }
+        } else {
+            val slots = generatePickupTimeSlots()
+            if (slots.isEmpty()) {
+                timeSlotsCard.visibility = View.GONE
+                return
+            }
+            timeSlotsCard.visibility = View.VISIBLE
+            updateTimeSlotsTitle("🏪 Pickup Time", "Select a pickup time slot")
 
-            currentRow?.addView(btn)
-            countInRow++
+            var currentRow: LinearLayout? = null
+            var countInRow = 0
 
-            if (countInRow >= 3 || index == hours.size - 1) {
-                currentRow?.let { timeSlotsContainer.addView(it) }
-                countInRow = 0
+            slots.forEachIndexed { index, (display, value) ->
+                if (countInRow == 0) {
+                    currentRow = LinearLayout(this).apply {
+                        orientation = LinearLayout.HORIZONTAL
+                        layoutParams = LinearLayout.LayoutParams(
+                            LinearLayout.LayoutParams.MATCH_PARENT,
+                            LinearLayout.LayoutParams.WRAP_CONTENT
+                        )
+                    }
+                }
+
+                val btn = Button(this)
+                btn.text = display
+                btn.textSize = 12f
+                btn.setTypeface(btn.typeface, android.graphics.Typeface.BOLD)
+                btn.minWidth = 0
+                btn.minHeight = 0
+                btn.setPadding(16, 10, 16, 10)
+                btn.layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.WRAP_CONTENT,
+                    36.dpToPx()
+                ).apply {
+                    setMargins(0, 0, 8.dpToPx(), 8.dpToPx())
+                }
+                btn.setBackgroundResource(R.drawable.toggle_btn_inactive)
+                btn.setTextColor(Color.parseColor("#666666"))
+
+                btn.setOnClickListener {
+                    selectedTime = value
+                    updateTimeSlotSelection()
+                }
+
+                currentRow?.addView(btn)
+                countInRow++
+
+                if (countInRow >= 3 || index == slots.size - 1) {
+                    currentRow?.let { timeSlotsContainer.addView(it) }
+                    countInRow = 0
+                }
+            }
+
+            if (selectedTime.isNotEmpty()) {
+                updateTimeSlotSelection()
             }
         }
+    }
 
-        if (selectedTime.isNotEmpty()) {
-            updateTimeSlotSelection()
-        }
+    private fun updateTimeSlotsTitle(title: String, subtitle: String) {
+        val card = timeSlotsCard
+        val titleView = card.getChildAt(0) as? TextView
+        val subtitleView = card.getChildAt(1) as? TextView
+        titleView?.text = title
+        subtitleView?.text = subtitle
     }
 
     private fun updateTimeSlotSelection() {
@@ -428,7 +660,12 @@ class CreateOrderActivity : AppCompatActivity() {
             for (j in 0 until row.childCount) {
                 val btn = row.getChildAt(j) as? Button ?: continue
                 val displayTime = btn.text.toString()
-                if (displayTime == formatTimeSlot(selectedTime)) {
+                val isSelected = if (isDelivery) {
+                    displayTime == formatTimeSlot(selectedTime)
+                } else {
+                    displayTime == formatTimeSlot(selectedTime)
+                }
+                if (isSelected) {
                     btn.setBackgroundResource(R.drawable.toggle_btn_active)
                     btn.setTextColor(Color.WHITE)
                 } else {
@@ -783,6 +1020,22 @@ class CreateOrderActivity : AppCompatActivity() {
     }
 
     // -------------------------------------------------------------------------
+    // Date Display Helper
+    // -------------------------------------------------------------------------
+
+    private fun formatSelectedDateForDisplay(): String {
+        if (selectedDate.isEmpty()) return selectedDate
+        return try {
+            val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.US)
+            val displaySdf = SimpleDateFormat("MMMM dd, yyyy", Locale.US)
+            val date = sdf.parse(selectedDate)
+            if (date != null) displaySdf.format(date) else selectedDate
+        } catch (e: Exception) {
+            selectedDate
+        }
+    }
+
+    // -------------------------------------------------------------------------
     // Preview Toggle
     // -------------------------------------------------------------------------
 
@@ -802,7 +1055,7 @@ class CreateOrderActivity : AppCompatActivity() {
             previewAddressCard.visibility = View.GONE
         }
 
-        tvPreviewDate.text = "Date: $selectedDate"
+        tvPreviewDate.text = "Date: ${formatSelectedDateForDisplay()}"
         tvPreviewTime.text = if (selectedTime.isNotEmpty()) "Time: ${formatTimeSlot(selectedTime)}" else "Time: Not set"
 
         val instructions = etAdditionalDetails.text.toString().trim()
@@ -899,6 +1152,11 @@ class CreateOrderActivity : AppCompatActivity() {
 
         if (isDelivery && currentStation?.deliveryHours?.isNotEmpty() == true && selectedTime.isEmpty()) {
             Toast.makeText(this, "Please select a delivery time slot", Toast.LENGTH_SHORT).show()
+            return false
+        }
+
+        if (!isDelivery && currentStation?.businessHours?.isNotEmpty() == true && selectedTime.isEmpty()) {
+            Toast.makeText(this, "Please select a pickup time slot", Toast.LENGTH_SHORT).show()
             return false
         }
 

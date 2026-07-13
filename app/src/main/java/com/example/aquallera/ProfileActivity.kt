@@ -2,6 +2,7 @@ package com.example.aquallera
 
 import android.content.Intent
 import android.graphics.Color
+import android.net.Uri
 import android.os.Bundle
 import android.widget.Button
 import android.widget.LinearLayout
@@ -40,6 +41,7 @@ class ProfileActivity : AppCompatActivity() {
     private lateinit var btnMaps: Button
     private lateinit var btnSeeOrders: Button
     private lateinit var btnAbout: Button
+    private lateinit var btnReportBug: Button
     private lateinit var btnLogOut: Button
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -71,6 +73,7 @@ class ProfileActivity : AppCompatActivity() {
         btnMaps = findViewById(R.id.btnMaps)
         btnSeeOrders = findViewById(R.id.btnSeeOrders)
         btnAbout = findViewById(R.id.btnAbout)
+        btnReportBug = findViewById(R.id.btnReportBug)
         btnLogOut = findViewById(R.id.btnLogOut)
     }
 
@@ -89,6 +92,15 @@ class ProfileActivity : AppCompatActivity() {
 
         btnAbout.setOnClickListener {
             startActivity(Intent(this, AboutActivity::class.java))
+        }
+
+        btnReportBug.setOnClickListener {
+            val intent = Intent(Intent.ACTION_SENDTO).apply {
+                data = Uri.parse("mailto:aquallera.main@gmail.com")
+                putExtra(Intent.EXTRA_SUBJECT, "Bug Report - Aquallera")
+                putExtra(Intent.EXTRA_TEXT, "Please describe the issue you encountered in detail:\n\n")
+            }
+            startActivity(Intent.createChooser(intent, "Report Bug"))
         }
 
         btnLogOut.setOnClickListener {
