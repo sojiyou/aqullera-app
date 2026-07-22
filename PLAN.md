@@ -238,11 +238,11 @@ Polish the Android UI to match the PWA reference designs.
 - [x] "Return" + "Order Now" buttons at bottom
 
 ### Create Order
-- [ ] Address search with Mapbox geocoding (text input + suggestions)
-- [ ] GPS location button to auto-fill address
-- [ ] Preferred date selector: calendar for pickup, day grid for delivery
-- [ ] Delivery time slot selection
-- [ ] Order preview screen before submitting
+- [x] Address search with Mapbox geocoding (text input + suggestions)
+- [x] GPS location button to auto-fill address
+- [x] Preferred date selector: calendar for pickup, day grid for delivery
+- [x] Delivery time slot selection
+- [x] Order preview screen before submitting
 
 ### Orders / Profile
 - [ ] Auto-cancel orders when a station is revoked
@@ -264,11 +264,11 @@ Polish the Android UI to match the PWA reference designs.
 - [x] StoreDetailsScreen: BusinessHoursCard open/close format support
 - [x] WaterStationCard: add "View on Map" + "Order Now" buttons
 - [x] MapScreen: fly-to-station on "View on Map" button
-- [ ] CreateOrderScreen: address search with Mapbox
-- [ ] CreateOrderScreen: GPS location button
-- [ ] CreateOrderScreen: date selector
-- [ ] CreateOrderScreen: time slot picker
-- [ ] CreateOrderScreen: order preview
+- [x] CreateOrderScreen: address search with Mapbox
+- [x] CreateOrderScreen: GPS location button
+- [x] CreateOrderScreen: date selector
+- [x] CreateOrderScreen: time slot picker
+- [x] CreateOrderScreen: order preview
 - [ ] OrdersScreen: auto-cancel revoked stations
 - [ ] ProfileScreen: email verification badge + resend
 
@@ -315,3 +315,23 @@ Polish the Android UI to match the PWA reference designs.
 
 ### Files Changed
 - **Modified:** `WaterStationCard.kt`, `StoreDetailsScreen.kt`, `StoreViewModel.kt`, `MapViewModel.kt`, `MapScreen.kt`, `StationRepository.kt`, `TimeUtils.kt`, `NavGraph.kt`, `PLAN.md`
+
+---
+
+## Session Summary (Jul 22, 2026) — Part 2: CreateOrderScreen, Reference ID, Install
+
+### CreateOrderScreen — Complete PWA Alignment
+- **Address Search**: Mapbox geocoding text input with debounced suggestions dropdown
+- **GPS Location**: Button requests location permission, fetches location, reverse-geocodes via Mapbox → fills address
+- **Delivery Day Grid**: 7-day grid starting from today, day name/number chips, next-day minimum
+- **Pickup Date Picker**: DatePicker dialog for pickup orders
+- **Time Slot Picker**: For delivery — time chips generated from station business hours (1h slots). For pickup — same hours as chips
+- **Order Preview**: Full preview screen with Edit Order / Proceed buttons, fee breakdown (water subtotal, delivery fee, 2% transaction fee, grand total)
+
+### Reference Number — Fixed
+- Removed random `AQ-{timestamp}-{random}` client-side generation
+- `OrderRepository.createOrder()` now atomically increments `/orderCounter/{yyyyMMdd}` via Firebase `runTransaction`
+- Format: `{stationPrefix}-{yyyyMMdd}-{counter}` (e.g. `SOJ-20260713-0003`) matching PWA backend
+
+### Files Changed
+- **Modified:** `CreateOrderScreen.kt`, `CreateOrderViewModel.kt`, `OrderConfirmationScreen.kt`, `OrderConfirmationViewModel.kt`, `PendingOrderStore.kt`, `OrderRepository.kt`, `PLAN.md`
