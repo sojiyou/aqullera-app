@@ -1,0 +1,39 @@
+{
+  "rules": {
+    "users": {
+      ".read": true,
+      ".write": true,
+      ".indexOn": ["number", "email"]
+    },
+    "admins": {
+      ".read": true,
+      ".write": true
+    },
+    "waterStations": {
+      ".read": true,
+      ".write": true,
+      ".indexOn": "email",
+      "$stationId": {
+        ".read": true,
+        ".write": true,
+        "monthlyArchive": {
+          ".read": true,
+          ".write": true
+        },
+        "yearlyRevenue": {
+          ".read": true,
+          ".write": true
+        }
+      }
+    },
+    "orders": {
+      ".read": true,
+      ".write": true,
+      ".indexOn": "userId"
+    },
+    "orderCounter": {
+      ".read": true,
+      ".write": true
+    }
+  }
+}

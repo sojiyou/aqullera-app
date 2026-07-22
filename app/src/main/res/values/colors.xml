@@ -35,4 +35,5 @@
     <color name="gray_300">#D3D3D3</color>
     <color name="gray_500">#6B7280</color>
     <color name="gray_600">#4B5563</color>
+    <color name="ic_launcher_background">#FFFCF2</color>
 </resources>

@@ -1,16 +1,15 @@
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
+    alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.google.gms.google.services)
-    // Remove compose plugin since you're using XML layouts
-    // alias(libs.plugins.kotlin.compose)
+    alias(libs.plugins.hilt)
+    alias(libs.plugins.ksp)
 }
 
 android {
     namespace = "com.example.aquallera"
     compileSdk = 36
-    buildToolsVersion = "36.1.0"
-    // Changed from 36 to 34 (standard)
 
     defaultConfig {
         applicationId = "com.example.aquallera"
@@ -20,6 +19,15 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+    }
+
+    signingConfigs {
+        getByName("debug") {
+            storeFile = file("${System.getProperty("user.home")}/AppData/Local/Temp/debug.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
     }
 
     buildTypes {
@@ -35,67 +43,64 @@ android {
         }
     }
 
-    signingConfigs {
-        debug {
-            storeFile = file("${System.getProperty("user.home")}/AppData/Local/Temp/debug.keystore")
-            storePassword = "android"
-            keyAlias = "androiddebugkey"
-            keyPassword = "android"
-        }
-    }
-
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_1_8
-        targetCompatibility = JavaVersion.VERSION_1_8
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
     }
 
     kotlinOptions {
-        jvmTarget = "1.8"
+        jvmTarget = "17"
     }
 
-    // Remove compose build features since you're using XML
-    // buildFeatures {
-    //     compose = true
-    // }
+    buildFeatures {
+        compose = true
+    }
 }
 
 dependencies {
+    // Core
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
-    // Remove compose dependencies
-    // implementation(libs.androidx.activity.compose)
-    // implementation(platform(libs.androidx.compose.bom))
-    // implementation(libs.androidx.compose.ui)
-    // implementation(libs.androidx.compose.ui.graphics)
-    // implementation(libs.androidx.compose.ui.tooling.preview)
-    // implementation(libs.androidx.compose.material3)
+    implementation(libs.androidx.lifecycle.viewmodel.compose)
+    implementation(libs.androidx.lifecycle.runtime.compose)
+    implementation(libs.androidx.activity.compose)
 
-    implementation("androidx.appcompat:appcompat:1.6.1")
-    implementation("com.google.android.material:material:1.9.0")
-    implementation("androidx.constraintlayout:constraintlayout:2.1.4")
+    // Compose
+    implementation(platform(libs.androidx.compose.bom))
+    implementation(libs.androidx.compose.ui)
+    implementation(libs.androidx.compose.ui.graphics)
+    implementation(libs.androidx.compose.ui.tooling.preview)
+    implementation(libs.androidx.compose.material3)
+    implementation(libs.androidx.compose.material.icons.extended)
+    debugImplementation(libs.androidx.compose.ui.tooling)
+    debugImplementation(libs.androidx.compose.ui.test.manifest)
 
-    // Firebase dependencies
-    implementation(platform("com.google.firebase:firebase-bom:32.7.0"))
-    implementation("com.google.firebase:firebase-database")
-    implementation("com.google.firebase:firebase-analytics")
-    implementation("com.google.firebase:firebase-auth")
-    implementation("com.google.firebase:firebase-auth-ktx")
-    // Remove Google Maps if not needed
-    // implementation(libs.play.services.maps)
+    // Navigation
+    implementation(libs.androidx.navigation.compose)
+
+    // Hilt
+    implementation(libs.hilt.android)
+    ksp(libs.hilt.android.compiler)
+    implementation(libs.hilt.navigation.compose)
+
+    // Firebase
+    implementation(platform(libs.firebase.bom))
+    implementation(libs.firebase.database)
+    implementation(libs.firebase.auth.ktx)
+
+    // Mapbox
+    implementation(libs.mapbox.android)
+
+    // Location
+    implementation(libs.play.services.location)
 
     // Coroutines
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
+    implementation(libs.kotlinx.coroutines.android)
 
-    // Mapbox dependencies
-    implementation("com.mapbox.maps:android:11.0.0")
-    implementation("com.google.android.gms:play-services-location:21.0.1")
-
+    // Testing
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
-    // Remove compose test dependencies
-    // androidTestImplementation(platform(libs.androidx.compose.bom))
-    // androidTestImplementation(libs.androidx.compose.ui.test.junit4)
-    // debugImplementation(libs.androidx.compose.ui.tooling)
-    // debugImplementation(libs.androidx.compose.ui.test.manifest)
+    androidTestImplementation(platform(libs.androidx.compose.bom))
+    androidTestImplementation(libs.androidx.compose.ui.test.junit4)
 }

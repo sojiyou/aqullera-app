@@ -2,7 +2,7 @@
     <string name="app_name">Aquallera</string>
 
     <!--Mapbox token -->
-    <string name="mapbox_access_token">YOUR_MAPBOX_ACCESS_TOKEN</string>
+    <string name="mapbox_access_token">pk.eyJ1Ijoic29qaXlvdSIsImEiOiJjbWk4ZXRybmgwYmxkMmlweHNiNHhnM3V2In0.zIlAkkuMeFdQV9FPR6OgkQ</string>
 
     <!-- footer strings -->
     <string name="tvAppName">AQUA-LLERA</string>

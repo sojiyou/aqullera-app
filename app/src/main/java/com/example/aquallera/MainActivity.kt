@@ -1,41 +1,26 @@
 package com.example.aquallera
 
 import android.os.Bundle
-import android.content.Intent
-import androidx.appcompat.app.AppCompatActivity
-import android.widget.Button
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
+import androidx.navigation.compose.rememberNavController
+import com.example.aquallera.components.NotificationListener
+import com.example.aquallera.core.theme.AqualleraTheme
+import com.example.aquallera.navigation.AqualleraNavGraph
+import dagger.hilt.android.AndroidEntryPoint
 
-class MainActivity : AppCompatActivity() {
-
-    // initialize later
-    private lateinit var loginBtn: Button
-    private lateinit var signupBtn: Button
-
+@AndroidEntryPoint
+class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContentView(R.layout.activity_main)
-
-        initializeViews()
-        setupClickListeners()
-    }
-    private fun initializeViews() {
-        loginBtn = findViewById(R.id.LoginBtn)
-        signupBtn = findViewById(R.id.SignupBtn)
-    }
-
-    private fun setupClickListeners() {
-
-        //Login Button Click
-        loginBtn.setOnClickListener {
-            val intent = Intent(this, LoginActivity::class.java)
-            startActivity(intent)
-        }
-
-        //Sign Up Button Click
-        signupBtn.setOnClickListener {
-            val intent = Intent(this, SignupActivity::class.java)
-            startActivity(intent)
+        enableEdgeToEdge()
+        setContent {
+            AqualleraTheme {
+                val navController = rememberNavController()
+                NotificationListener()
+                AqualleraNavGraph(navController = navController)
+            }
         }
     }
 }
-
