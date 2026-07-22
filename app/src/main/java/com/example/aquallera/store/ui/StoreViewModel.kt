@@ -30,28 +30,18 @@ class StoreViewModel @Inject constructor(
     val uiState: StateFlow<StoreUiState> = _uiState.asStateFlow()
 
     init {
-        loadStation()
-    }
-
-    private fun loadStation() {
         if (stationId.isBlank()) {
             _uiState.value = StoreUiState(error = "Invalid station ID", loading = false)
-            return
-        }
-        viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(loading = true)
-            stationRepository.getStationById(stationId).fold(
-                onSuccess = { station ->
+        } else {
+            viewModelScope.launch {
+                stationRepository.getStationByIdFlow(stationId).collect { station ->
                     _uiState.value = StoreUiState(station = station, loading = false)
-                },
-                onFailure = { e ->
-                    _uiState.value = StoreUiState(loading = false, error = e.message ?: "Failed to load station")
-                },
-            )
+                }
+            }
         }
     }
 
     fun retry() {
-        loadStation()
+        // no-op: flow auto-refreshes
     }
 }

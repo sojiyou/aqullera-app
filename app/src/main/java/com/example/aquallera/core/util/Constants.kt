@@ -23,4 +23,6 @@ object Constants {
     const val EMAILJS_TEMPLATE_ID = "template_2rk5qyq"
     const val EMAILJS_PUBLIC_KEY = "fpu4u65UlHZOE96yR"
     const val EMAILJS_API_URL = "https://api.emailjs.com/api/v1.0/email/send"
+
+    const val MAPBOX_TOKEN = "pk.eyJ1Ijoic29qaXlvdSIsImEiOiJjbWk4ZXRybmgwYmxkMmlweHNiNHhnM3V2In0.zIlAkkuMeFdQV9FPR6OgkQ"
 }

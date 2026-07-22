@@ -27,6 +27,7 @@ data class MapUiState(
     val selectedStation: WaterStation? = null,
     val userLat: Double? = null,
     val userLng: Double? = null,
+    val flyToStationId: String? = null,
 ) {
     val filteredStations: List<WaterStation>
         get() = stations.filter { s ->
@@ -53,15 +54,9 @@ class MapViewModel @Inject constructor(
 
     private fun loadStations() {
         viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(loading = true)
-            stationRepository.getAllStations().fold(
-                onSuccess = { stations ->
-                    _uiState.value = _uiState.value.copy(stations = stations, loading = false)
-                },
-                onFailure = { e ->
-                    _uiState.value = _uiState.value.copy(loading = false, error = e.message)
-                },
-            )
+            stationRepository.getAllStationsFlow().collect { stations ->
+                _uiState.update { it.copy(stations = stations, loading = false) }
+            }
         }
     }
 
@@ -77,11 +72,19 @@ class MapViewModel @Inject constructor(
         _uiState.update { it.copy(userLat = lat, userLng = lng) }
     }
 
+    fun flyToStation(stationId: String) {
+        _uiState.update { it.copy(flyToStationId = stationId) }
+    }
+
+    fun clearFlyToStation() {
+        _uiState.update { it.copy(flyToStationId = null) }
+    }
+
     fun clearError() {
         _uiState.update { it.copy(error = null) }
     }
 
     fun retry() {
-        loadStations()
+        // no-op: flow auto-refreshes
     }
 }

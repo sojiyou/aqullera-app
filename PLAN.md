@@ -231,11 +231,11 @@ Polish the Android UI to match the PWA reference designs.
 - [x] Show mini info card overlay at top when a station is selected on the map
 
 ### Store Details
-- [ ] Header badges: show Online/Offline + Approved/Pending statuses
-- [ ] Service types: "Pickup & Delivery" subtitle + individual Capability chips
-- [ ] Pricing in 3-column grid layout (Pure / Spring / Mineral)
-- [ ] Delivery Days section + Delivery Hours time-slot chips
-- [ ] "Return" + "Order Now" buttons at bottom
+- [x] Header badges: show Online/Offline + Approved/Pending statuses
+- [x] Service types: "Pickup & Delivery" subtitle + individual Capability chips
+- [x] Pricing in 3-column grid layout (Pure / Spring / Mineral)
+- [x] Delivery Days section + Delivery Hours time-slot chips
+- [x] "Return" + "Order Now" buttons at bottom
 
 ### Create Order
 - [ ] Address search with Mapbox geocoding (text input + suggestions)
@@ -256,11 +256,14 @@ Polish the Android UI to match the PWA reference designs.
 - [x] MapScreen: "How to Order" dialog
 - [x] MapScreen: user location button + blue dot
 - [x] MapScreen: selected-station mini info card
-- [ ] StoreDetailsScreen: dual status badges (Online/Offline + Approved/Pending)
-- [ ] StoreDetailsScreen: service type chips
-- [ ] StoreDetailsScreen: 3-column pricing grid
-- [ ] StoreDetailsScreen: delivery days + hours
-- [ ] StoreDetailsScreen: action buttons layout
+- [x] StoreDetailsScreen: dual status badges (Online/Offline + Approved/Pending)
+- [x] StoreDetailsScreen: service type chips (Pickup & Delivery subtitle + OrderListBg chips)
+- [x] StoreDetailsScreen: 3-column pricing grid
+- [x] StoreDetailsScreen: delivery days + hours chips
+- [x] StoreDetailsScreen: action buttons layout (Return + Order Now)
+- [x] StoreDetailsScreen: BusinessHoursCard open/close format support
+- [x] WaterStationCard: add "View on Map" + "Order Now" buttons
+- [x] MapScreen: fly-to-station on "View on Map" button
 - [ ] CreateOrderScreen: address search with Mapbox
 - [ ] CreateOrderScreen: GPS location button
 - [ ] CreateOrderScreen: date selector
@@ -284,3 +287,31 @@ Polish the Android UI to match the PWA reference designs.
 
 ### Files Changed
 - **Modified:** `MapScreen.kt`, `MapViewModel.kt`, `WaterStationCard.kt`, `PLAN.md`
+
+---
+
+## Session Summary (Jul 22, 2026) — Part 2: Store Details, Real-Time & Card Buttons
+
+### StoreDetailsScreen — PWA Alignment
+- **HeaderSection**: Midnight-blue background with dual status pill badges — Online/Offline (green/orange) + Approved/Pending (green/orange)
+- **ServicesCard**: Added subtitle ("Pickup & Delivery" / "Delivery Only" / "Pickup Only"). Chips changed to `OrderListBg` bg with `MidnightBlue` text
+- **PricingCard**: Title → "Price List". 3-column grid (Pure/Spring/Mineral) using `OrderListBg` rounded cells. Spring falls back to `pricing_liter_spring`
+- **DeliveryDaysCard** + **DeliveryHoursCard**: Split from single card, chips with `OrderListBg` bg
+- **ActionButtons**: "Return" (OutlinedButton) + "Order Now" (Button, 50% opacity if not approved)
+- **BusinessHoursCard**: Added `open`/`close` key detection — single row format when present, per-day fallback
+
+### Real-Time Status Updates
+- **StationRepository**: Added `getStationByIdFlow()` and `getAllStationsFlow()` using `callbackFlow` (Firebase `addValueEventListener`) replacing one-shot `.get().await()`
+- **StoreViewModel**: Collects from flow — website changes (online/offline) reflect instantly
+- **MapViewModel**: Collects from flow — station list auto-updates
+- **TimeUtils**: Added `to12Hour()` matching PWA format (e.g. "09:00" → "9:00 AM")
+
+### WaterStationCard — Action Buttons
+- Added `onViewOnMap` (flies camera) and `onOrderNow` (→ CreateOrder) buttons
+- "Order Now" dimmed at 50% opacity when not approved
+
+### MapScreen — Fly-To
+- `MapUiState` gains `flyToStationId`; `MapboxMapView` flies camera to station coordinates on change
+
+### Files Changed
+- **Modified:** `WaterStationCard.kt`, `StoreDetailsScreen.kt`, `StoreViewModel.kt`, `MapViewModel.kt`, `MapScreen.kt`, `StationRepository.kt`, `TimeUtils.kt`, `NavGraph.kt`, `PLAN.md`

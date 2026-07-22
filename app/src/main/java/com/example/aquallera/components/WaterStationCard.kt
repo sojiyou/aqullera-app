@@ -39,6 +39,8 @@ fun WaterStationCard(
     userLat: Double? = null,
     userLng: Double? = null,
     onTap: () -> Unit,
+    onViewOnMap: () -> Unit = {},
+    onOrderNow: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val distanceText = remember(station, userLat, userLng) {
@@ -122,6 +124,38 @@ fun WaterStationCard(
                         }
                     }
                 }
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                val isApproved = station.status == "approved"
+                Text(
+                    text = "View on Map",
+                    color = Color.White,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Medium,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(6.dp))
+                        .background(MidnightBlue)
+                        .clickable(onClick = onViewOnMap)
+                        .padding(horizontal = 10.dp, vertical = 5.dp),
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(
+                    text = "Order Now",
+                    color = Color.White,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Medium,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(6.dp))
+                        .background(if (isApproved) MidnightBlue else MidnightBlue.copy(alpha = 0.5f))
+                        .clickable(enabled = isApproved, onClick = onOrderNow)
+                        .padding(horizontal = 10.dp, vertical = 5.dp),
+                )
             }
         }
     }

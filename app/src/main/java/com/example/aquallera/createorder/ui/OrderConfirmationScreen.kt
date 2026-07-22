@@ -1,16 +1,22 @@
 package com.example.aquallera.createorder.ui
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -24,14 +30,19 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.aquallera.components.PrimaryButton
 import com.example.aquallera.components.ReceiptCard
 import com.example.aquallera.core.theme.AppBg
+import com.example.aquallera.core.theme.InputBg
 import com.example.aquallera.core.theme.MidnightBlue
 import com.example.aquallera.core.model.Order
+import com.example.aquallera.core.util.TimeUtils
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -99,23 +110,32 @@ fun OrderConfirmationScreen(
 
             ReceiptCard(order = order, modifier = Modifier.padding(horizontal = 16.dp))
 
+            InfoCard(title = "Order Type") {
+                Text(pendingOrder.orderType, fontSize = 14.sp, color = Color.DarkGray)
+            }
+
+            if (pendingOrder.preferredDate.isNotBlank()) {
+                InfoCard(title = "Preferred Date") {
+                    Text(pendingOrder.preferredDate, fontSize = 14.sp, color = Color.DarkGray)
+                }
+            }
+
+            if (pendingOrder.preferredTime.isNotBlank()) {
+                InfoCard(title = "Preferred Time") {
+                    Text(TimeUtils.to12Hour(pendingOrder.preferredTime), fontSize = 14.sp, color = Color.DarkGray)
+                }
+            }
+
             if (pendingOrder.deliveryAddress.isNotBlank()) {
-                Spacer(modifier = Modifier.height(8.dp))
-                androidx.compose.material3.Card(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-                    colors = androidx.compose.material3.CardDefaults.cardColors(containerColor = AppBg),
-                ) {
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        Text("Delivery Address", color = MidnightBlue)
-                        Text(pendingOrder.deliveryAddress, color = androidx.compose.ui.graphics.Color.Gray)
-                        if (pendingOrder.locationDetails.isNotBlank()) {
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text(pendingOrder.locationDetails, color = androidx.compose.ui.graphics.Color.Gray)
-                        }
-                        if (pendingOrder.additionalDetails.isNotBlank()) {
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text(pendingOrder.additionalDetails, color = androidx.compose.ui.graphics.Color.Gray)
-                        }
+                InfoCard(title = "Delivery Address") {
+                    Text(pendingOrder.deliveryAddress, fontSize = 14.sp, color = Color.DarkGray)
+                    if (pendingOrder.locationDetails.isNotBlank()) {
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(pendingOrder.locationDetails, fontSize = 12.sp, color = Color.Gray)
+                    }
+                    if (pendingOrder.additionalDetails.isNotBlank()) {
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(pendingOrder.additionalDetails, fontSize = 12.sp, color = Color.Gray)
                     }
                 }
             }
@@ -136,6 +156,22 @@ fun OrderConfirmationScreen(
                 )
             }
             Spacer(modifier = Modifier.height(24.dp))
+        }
+    }
+}
+
+@Composable
+private fun InfoCard(title: String, content: @Composable () -> Unit) {
+    Spacer(modifier = Modifier.height(8.dp))
+    Card(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+        colors = CardDefaults.cardColors(containerColor = AppBg),
+        shape = RoundedCornerShape(8.dp),
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Text(title, fontWeight = FontWeight.SemiBold, fontSize = 14.sp, color = MidnightBlue)
+            Spacer(modifier = Modifier.height(2.dp))
+            content()
         }
     }
 }

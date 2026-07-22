@@ -79,6 +79,7 @@ import kotlin.math.abs
 @Composable
 fun MapScreen(
     onStationTap: (stationId: String) -> Unit = {},
+    onOrderNow: (stationId: String) -> Unit = {},
     viewModel: MapViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -115,6 +116,8 @@ fun MapScreen(
         MapboxMapView(
             stations = uiState.stations,
             onStationSelected = { station -> viewModel.selectStation(station) },
+            flyToStationId = uiState.flyToStationId,
+            onFlyToCompleted = { viewModel.clearFlyToStation() },
             modifier = Modifier.fillMaxSize(),
         )
 
@@ -208,6 +211,11 @@ fun MapScreen(
                 userLng = uiState.userLng,
                 onStationTap = onStationTap,
                 onFilterChange = { viewModel.setFilter(it) },
+                onViewOnMap = { station ->
+                    viewModel.selectStation(station)
+                    viewModel.flyToStation(station.id)
+                },
+                onOrderNow = { onOrderNow(it) },
                 modifier = Modifier.align(Alignment.BottomCenter),
             )
         } else {
@@ -369,6 +377,8 @@ private fun StationBottomPanel(
     userLng: Double?,
     onStationTap: (String) -> Unit,
     onFilterChange: (StationFilter) -> Unit,
+    onViewOnMap: (WaterStation) -> Unit = {},
+    onOrderNow: (String) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val density = LocalDensity.current
@@ -462,6 +472,8 @@ private fun StationBottomPanel(
                     userLat = userLat,
                     userLng = userLng,
                     onTap = { onStationTap(station.id) },
+                    onViewOnMap = { onViewOnMap(station) },
+                    onOrderNow = { onOrderNow(station.id) },
                     modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
                 )
             }
@@ -473,6 +485,8 @@ private fun StationBottomPanel(
 private fun MapboxMapView(
     stations: List<WaterStation>,
     onStationSelected: (WaterStation) -> Unit,
+    flyToStationId: String? = null,
+    onFlyToCompleted: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -564,7 +578,7 @@ private fun MapboxMapView(
             stationMap[ann]?.let { onStationSelected(it) }
             true
         }
-        if (stations.isNotEmpty()) {
+        if (stations.isNotEmpty() && flyToStationId == null) {
             mapView.mapboxMap.setCamera(
                 CameraOptions.Builder()
                     .center(Point.fromLngLat(stations.first().longitude, stations.first().latitude))
@@ -572,6 +586,18 @@ private fun MapboxMapView(
                     .build()
             )
         }
+    }
+
+    LaunchedEffect(flyToStationId) {
+        val id = flyToStationId ?: return@LaunchedEffect
+        val station = stations.find { it.id == id } ?: return@LaunchedEffect
+        mapView.mapboxMap.setCamera(
+            CameraOptions.Builder()
+                .center(Point.fromLngLat(station.longitude, station.latitude))
+                .zoom(15.0)
+                .build()
+        )
+        onFlyToCompleted()
     }
 
     AndroidView(
@@ -675,7 +701,7 @@ private fun HowToOrderDialog(onClose: () -> Unit) {
 
 private data class HowToStep(val number: Int, val title: String, val description: String)
 
-private fun getUserLocation(context: Context, onResult: (Double, Double) -> Unit) {
+fun getUserLocation(context: Context, onResult: (Double, Double) -> Unit) {
     try {
         val locationManager = context.getSystemService(Context.LOCATION_SERVICE) as LocationManager
         val hasGps = locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)

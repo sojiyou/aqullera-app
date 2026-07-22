@@ -26,4 +26,16 @@ object TimeUtils {
             else -> formatDate(timestamp)
         }
     }
+
+    fun to12Hour(timeStr: String): String {
+        val regex = Regex("""\b(\d{1,2}):(\d{2})\b(?!\s*(?:AM|PM))""", RegexOption.IGNORE_CASE)
+        return regex.replace(timeStr) { match ->
+            val hour = match.groupValues[1].toIntOrNull() ?: return@replace match.value
+            val minute = match.groupValues[2].toIntOrNull() ?: return@replace match.value
+            if (hour > 23 || minute > 59) return@replace match.value
+            val ampm = if (hour >= 12) "PM" else "AM"
+            val h12 = if (hour % 12 == 0) 12 else hour % 12
+            "${h12}:${match.groupValues[2]} $ampm"
+        }
+    }
 }

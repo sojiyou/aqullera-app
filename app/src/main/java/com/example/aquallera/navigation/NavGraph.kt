@@ -143,6 +143,9 @@ fun AqualleraNavGraph(
                     onStationTap = { stationId ->
                         navController.navigate(Routes.storeDetails(stationId))
                     },
+                    onOrderNow = { stationId ->
+                        navController.navigate(Routes.createOrder(stationId))
+                    },
                 )
             }
         }

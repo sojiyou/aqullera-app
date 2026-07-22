@@ -23,6 +23,11 @@ data class PendingOrderData(
     val locationDetails: String = "",
     val additionalDetails: String = "",
     val paymentMethod: String = "Cash on Delivery",
+    val orderType: String = "Delivery",
+    val preferredDate: String = "",
+    val preferredTime: String = "",
+    val deliveryLatitude: Double = 0.0,
+    val deliveryLongitude: Double = 0.0,
 )
 
 @Singleton

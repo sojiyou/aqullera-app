@@ -13,7 +13,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import javax.inject.Inject
-import java.util.UUID
 
 data class ConfirmationUiState(
     val confirming: Boolean = false,
@@ -54,9 +53,9 @@ class OrderConfirmationViewModel @Inject constructor(
                 userEmail = user.email ?: "",
                 customerName = user.displayName ?: "",
                 customerPhone = "",
-                orderType = "delivery",
-                date = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).format(java.util.Date()),
-                time = java.text.SimpleDateFormat("h:mm a", java.util.Locale.US).format(java.util.Date()),
+                orderType = data.orderType.lowercase(),
+                date = data.preferredDate.ifBlank { java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).format(java.util.Date()) },
+                time = data.preferredTime.ifBlank { java.text.SimpleDateFormat("h:mm a", java.util.Locale.US).format(java.util.Date()) },
                 pureWaterQty = data.pureWaterQty,
                 springWaterQty = data.springWaterQty,
                 mineralWaterQty = data.mineralWaterQty,
@@ -73,8 +72,9 @@ class OrderConfirmationViewModel @Inject constructor(
                 deliveryAddress = data.deliveryAddress,
                 locationDetails = data.locationDetails,
                 additionalDetails = data.additionalDetails,
+                deliveryLatitude = data.deliveryLatitude,
+                deliveryLongitude = data.deliveryLongitude,
                 paymentMethod = data.paymentMethod,
-                referenceNumber = generateReference(),
             )
 
             orderRepository.createOrder(order).fold(
@@ -91,11 +91,5 @@ class OrderConfirmationViewModel @Inject constructor(
                 },
             )
         }
-    }
-
-    private fun generateReference(): String {
-        val timestamp = System.currentTimeMillis() % 100000
-        val random = UUID.randomUUID().toString().take(4).uppercase()
-        return "AQ-$timestamp-$random"
     }
 }

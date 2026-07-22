@@ -18,13 +18,15 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
@@ -36,21 +38,19 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.aquallera.components.LoadingIndicator
 import com.example.aquallera.components.PrimaryButton
-import com.example.aquallera.components.WaterStationCard
 import com.example.aquallera.core.model.WaterStation
 import com.example.aquallera.core.theme.AppBg
 import com.example.aquallera.core.theme.MidnightBlue
+import com.example.aquallera.core.theme.OrderListBg
 import com.example.aquallera.core.theme.StatusCompleted
 import com.example.aquallera.core.theme.StatusOnDelivery
-import java.time.DayOfWeek
-import java.time.LocalDate
-import java.time.format.TextStyle
-import java.util.Locale
+import com.example.aquallera.core.util.TimeUtils
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -88,13 +88,14 @@ fun StoreDetailsScreen(
             uiState.station != null -> {
                 StoreDetailsContent(
                     station = uiState.station!!,
+                    onBack = onBack,
                     onOrderNow = { onOrderNow(uiState.station!!.id) },
                     modifier = Modifier.padding(padding),
                 )
             }
             else -> {
                 Box(modifier = Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
-                    Text(text = "Station not found", color = androidx.compose.ui.graphics.Color.Gray, fontSize = 16.sp)
+                    Text(text = "Station not found", color = Color.Gray, fontSize = 16.sp)
                 }
             }
         }
@@ -104,6 +105,7 @@ fun StoreDetailsScreen(
 @Composable
 private fun StoreDetailsContent(
     station: WaterStation,
+    onBack: () -> Unit,
     onOrderNow: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -118,9 +120,13 @@ private fun StoreDetailsContent(
         BusinessHoursCard(station.businessHours)
         Spacer(modifier = Modifier.height(8.dp))
         ServicesCard(station.serviceTypes)
-        if (!station.deliveryDays.isNullOrEmpty() || !station.deliveryHours.isNullOrEmpty()) {
+        if (station.serviceTypes.contains("delivery") && !station.deliveryDays.isNullOrEmpty()) {
             Spacer(modifier = Modifier.height(8.dp))
-            DeliveryInfoCard(station)
+            DeliveryDaysCard(station.deliveryDays)
+        }
+        if (station.serviceTypes.contains("delivery") && !station.deliveryHours.isNullOrEmpty()) {
+            Spacer(modifier = Modifier.height(8.dp))
+            DeliveryHoursCard(station.deliveryHours)
         }
         Spacer(modifier = Modifier.height(8.dp))
         PricingCard(station)
@@ -131,11 +137,10 @@ private fun StoreDetailsContent(
         Spacer(modifier = Modifier.height(8.dp))
         ContactCard(station)
         Spacer(modifier = Modifier.height(16.dp))
-        PrimaryButton(
-            text = "Order Now",
-            onClick = onOrderNow,
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-            buttonWidth = 350,
+        ActionButtons(
+            isApproved = station.status == "approved",
+            onBack = onBack,
+            onOrderNow = onOrderNow,
         )
         Spacer(modifier = Modifier.height(24.dp))
     }
@@ -143,30 +148,53 @@ private fun StoreDetailsContent(
 
 @Composable
 private fun HeaderSection(station: WaterStation) {
-    Column(modifier = Modifier.padding(16.dp)) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(MidnightBlue)
+            .padding(16.dp),
+    ) {
         Text(
             text = station.stationName,
-            fontSize = 24.sp,
+            fontSize = 20.sp,
             fontWeight = FontWeight.Bold,
-            color = MidnightBlue,
+            color = AppBg,
         )
         if (station.address.isNotBlank()) {
             Text(
-                text = station.address.ifBlank { station.city },
+                text = station.address,
                 fontSize = 14.sp,
-                color = Color.Gray,
+                color = AppBg.copy(alpha = 0.8f),
                 modifier = Modifier.padding(top = 4.dp),
             )
         }
-        Spacer(modifier = Modifier.height(8.dp))
-        val (statusText, statusColor) = if (station.isOnline) "Open" to StatusCompleted else "Closed" to StatusOnDelivery
-        Text(
-            text = statusText,
-            fontSize = 14.sp,
-            fontWeight = FontWeight.SemiBold,
-            color = statusColor,
-        )
+        Spacer(modifier = Modifier.height(10.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            val isOnline = station.isOnline
+            StatusBadge(
+                text = if (isOnline) "Online" else "Offline",
+                color = if (isOnline) StatusCompleted else StatusOnDelivery,
+            )
+            val isApproved = station.status == "approved"
+            StatusBadge(
+                text = if (isApproved) "Approved" else "Pending",
+                color = if (isApproved) StatusCompleted else StatusOnDelivery,
+            )
+        }
     }
+}
+
+@Composable
+private fun StatusBadge(text: String, color: Color) {
+    Text(
+        text = text,
+        fontSize = 12.sp,
+        fontWeight = FontWeight.Medium,
+        color = Color.White,
+        modifier = Modifier
+            .background(color, RoundedCornerShape(12.dp))
+            .padding(horizontal = 12.dp, vertical = 4.dp),
+    )
 }
 
 @Composable
@@ -181,28 +209,50 @@ private fun BusinessHoursCard(hours: Map<String, String>) {
             Text("Business Hours", fontWeight = FontWeight.Bold, fontSize = 18.sp, color = MidnightBlue)
             Spacer(modifier = Modifier.height(8.dp))
 
-            val todayName = LocalDate.now().dayOfWeek.getDisplayName(TextStyle.FULL, Locale.US)
-            val days = listOf("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")
-
-            days.forEach { day ->
-                val time = hours[day] ?: "Closed"
-                val isToday = day == todayName
+            if (hours.containsKey("open") && hours.containsKey("close")) {
                 Row(
-                    modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
+                    modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
                 ) {
                     Text(
-                        text = day.take(3),
-                        fontWeight = if (isToday) FontWeight.Bold else FontWeight.Normal,
+                        text = "Business Hours",
+                        fontWeight = FontWeight.Bold,
                         fontSize = 14.sp,
-                        color = if (isToday) MidnightBlue else Color.DarkGray,
+                        color = MidnightBlue,
                     )
                     Text(
-                        text = time,
-                        fontWeight = if (isToday) FontWeight.Bold else FontWeight.Normal,
+                        text = "${TimeUtils.to12Hour(hours["open"] ?: "")} - ${TimeUtils.to12Hour(hours["close"] ?: "")}",
+                        fontWeight = FontWeight.Bold,
                         fontSize = 14.sp,
-                        color = if (isToday) MidnightBlue else Color.DarkGray,
+                        color = MidnightBlue,
                     )
+                }
+            } else {
+                val days = listOf("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")
+                val todayName = listOf("Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday")[
+                    java.util.Calendar.getInstance().get(java.util.Calendar.DAY_OF_WEEK) - 1
+                ]
+
+                days.forEach { day ->
+                    val time = hours[day] ?: "Closed"
+                    val isToday = day == todayName
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                    ) {
+                        Text(
+                            text = day.take(3),
+                            fontWeight = if (isToday) FontWeight.Bold else FontWeight.Normal,
+                            fontSize = 14.sp,
+                            color = if (isToday) MidnightBlue else Color.DarkGray,
+                        )
+                        Text(
+                            text = time,
+                            fontWeight = if (isToday) FontWeight.Bold else FontWeight.Normal,
+                            fontSize = 14.sp,
+                            color = if (isToday) MidnightBlue else Color.DarkGray,
+                        )
+                    }
                 }
             }
         }
@@ -220,10 +270,24 @@ private fun ServicesCard(serviceTypes: List<String>) {
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Text("Offered Services", fontWeight = FontWeight.Bold, fontSize = 18.sp, color = MidnightBlue)
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(4.dp))
             if (serviceTypes.isEmpty()) {
                 Text("No services listed", fontSize = 14.sp, color = Color.Gray)
             } else {
+                val subtitle = when {
+                    serviceTypes.contains("delivery") && serviceTypes.contains("pickup") -> "Pickup & Delivery"
+                    serviceTypes.contains("delivery") -> "Delivery Only"
+                    serviceTypes.contains("pickup") -> "Pickup Only"
+                    else -> ""
+                }
+                if (subtitle.isNotBlank()) {
+                    Text(
+                        text = subtitle,
+                        fontSize = 12.sp,
+                        color = Color.Gray,
+                        modifier = Modifier.padding(bottom = 8.dp),
+                    )
+                }
                 FlowRow(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalArrangement = Arrangement.spacedBy(4.dp),
@@ -231,10 +295,11 @@ private fun ServicesCard(serviceTypes: List<String>) {
                     serviceTypes.forEach { service ->
                         Text(
                             text = service.replaceFirstChar { it.uppercase() },
-                            fontSize = 13.sp,
-                            color = Color.White,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = MidnightBlue,
                             modifier = Modifier
-                                .background(MidnightBlue, RoundedCornerShape(16.dp))
+                                .background(OrderListBg, RoundedCornerShape(16.dp))
                                 .padding(horizontal = 12.dp, vertical = 6.dp),
                         )
                     }
@@ -244,8 +309,9 @@ private fun ServicesCard(serviceTypes: List<String>) {
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun DeliveryInfoCard(station: WaterStation) {
+private fun DeliveryDaysCard(deliveryDays: List<String>) {
     Card(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
         shape = RoundedCornerShape(12.dp),
@@ -253,17 +319,61 @@ private fun DeliveryInfoCard(station: WaterStation) {
         colors = CardDefaults.cardColors(containerColor = Color.White),
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
-            Text("Delivery Info", fontWeight = FontWeight.Bold, fontSize = 18.sp, color = MidnightBlue)
+            Text("Delivery Days", fontWeight = FontWeight.Bold, fontSize = 18.sp, color = MidnightBlue)
             Spacer(modifier = Modifier.height(8.dp))
-            if (!station.deliveryDays.isNullOrEmpty()) {
-                Text("Delivery Days: ${station.deliveryDays.joinToString(", ")}", fontSize = 14.sp, color = Color.DarkGray)
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                deliveryDays.forEach { day ->
+                    Text(
+                        text = day.replaceFirstChar { it.uppercase() },
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = MidnightBlue,
+                        modifier = Modifier
+                            .background(OrderListBg, RoundedCornerShape(16.dp))
+                            .padding(horizontal = 12.dp, vertical = 6.dp),
+                    )
+                }
             }
-            if (!station.deliveryHours.isNullOrEmpty()) {
-                Text("Delivery Hours: ${station.deliveryHours.joinToString(", ")}", fontSize = 14.sp, color = Color.DarkGray)
-            }
-            Text("Delivery Radius: ${station.deliveryRadius} km", fontSize = 14.sp, color = Color.DarkGray)
-            if (station.pricing_delivery_fee != null && station.pricing_delivery_fee > 0) {
-                Text("Delivery Fee: ₱${"%.2f".format(station.pricing_delivery_fee)}", fontSize = 14.sp, color = Color.DarkGray)
+        }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun DeliveryHoursCard(deliveryHours: List<String>) {
+    Card(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+        shape = RoundedCornerShape(12.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Text("Delivery Hours", fontWeight = FontWeight.Bold, fontSize = 18.sp, color = MidnightBlue)
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = "Available delivery time slots",
+                fontSize = 12.sp,
+                color = Color.Gray,
+                modifier = Modifier.padding(bottom = 8.dp),
+            )
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                deliveryHours.forEach { time ->
+                    Text(
+                        text = time,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = MidnightBlue,
+                        modifier = Modifier
+                            .background(OrderListBg, RoundedCornerShape(16.dp))
+                            .padding(horizontal = 12.dp, vertical = 6.dp),
+                    )
+                }
             }
         }
     }
@@ -278,24 +388,35 @@ private fun PricingCard(station: WaterStation) {
         colors = CardDefaults.cardColors(containerColor = Color.White),
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
-            Text("Pricing", fontWeight = FontWeight.Bold, fontSize = 18.sp, color = MidnightBlue)
-            Spacer(modifier = Modifier.height(8.dp))
+            Text("Price List", fontWeight = FontWeight.Bold, fontSize = 18.sp, color = MidnightBlue)
+            Spacer(modifier = Modifier.height(10.dp))
 
-            if (station.pricing_gallon_pure != null) {
-                PricingRow("Pure Water (Gallon)", station.pricing_gallon_pure)
-            }
-            if (station.pricing_gallon_mineral != null) {
-                PricingRow("Mineral Water (Gallon)", station.pricing_gallon_mineral)
-            }
-            if (station.pricing_gallon_spring != null) {
-                PricingRow("Spring Water (Gallon)", station.pricing_gallon_spring)
-            }
-            if (station.pricing_liter_spring != null) {
-                PricingRow("Spring Water (Liter)", station.pricing_liter_spring)
-            }
-            if (station.pricing_gallon_pure == null && station.pricing_gallon_mineral == null
-                && station.pricing_gallon_spring == null && station.pricing_liter_spring == null
-            ) {
+            val hasPure = station.pricing_gallon_pure != null
+            val hasSpring = station.pricing_gallon_spring != null || station.pricing_liter_spring != null
+            val hasMineral = station.pricing_gallon_mineral != null
+
+            if (hasPure || hasSpring || hasMineral) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    PricingCell(
+                        label = "Pure (Gallon)",
+                        price = station.pricing_gallon_pure,
+                        modifier = Modifier.weight(1f),
+                    )
+                    PricingCell(
+                        label = "Spring (Gallon)",
+                        price = station.pricing_liter_spring ?: station.pricing_gallon_spring,
+                        modifier = Modifier.weight(1f),
+                    )
+                    PricingCell(
+                        label = "Mineral (Gallon)",
+                        price = station.pricing_gallon_mineral,
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+            } else {
                 Text("No pricing available", fontSize = 14.sp, color = Color.Gray)
             }
         }
@@ -303,16 +424,27 @@ private fun PricingCard(station: WaterStation) {
 }
 
 @Composable
-private fun PricingRow(label: String, price: Double) {
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
+private fun PricingCell(
+    label: String,
+    price: Double?,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier = modifier
+            .background(OrderListBg, RoundedCornerShape(8.dp))
+            .padding(12.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Text(text = label, fontSize = 14.sp, color = Color.DarkGray)
         Text(
-            text = "₱${"%.2f".format(price)}",
-            fontSize = 14.sp,
-            fontWeight = FontWeight.Medium,
+            text = label,
+            fontSize = 11.sp,
+            color = Color.Gray,
+        )
+        Spacer(modifier = Modifier.height(4.dp))
+        Text(
+            text = "₱${"%.2f".format(price ?: 0.0)}",
+            fontSize = 15.sp,
+            fontWeight = FontWeight.Bold,
             color = MidnightBlue,
         )
     }
@@ -351,6 +483,49 @@ private fun ContactCard(station: WaterStation) {
             if (station.email.isNotBlank()) {
                 Text("Email: ${station.email}", fontSize = 14.sp, color = Color.DarkGray)
             }
+        }
+    }
+}
+
+@Composable
+private fun ActionButtons(
+    isApproved: Boolean,
+    onBack: () -> Unit,
+    onOrderNow: () -> Unit,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        OutlinedButton(
+            onClick = onBack,
+            modifier = Modifier.weight(1f).height(48.dp),
+            shape = RoundedCornerShape(25.dp),
+            colors = ButtonDefaults.outlinedButtonColors(contentColor = MidnightBlue),
+        ) {
+            Text(
+                text = "Return",
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Medium,
+            )
+        }
+        Button(
+            onClick = onOrderNow,
+            enabled = isApproved,
+            modifier = Modifier.weight(1f).height(48.dp),
+            shape = RoundedCornerShape(25.dp),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = MidnightBlue,
+                contentColor = AppBg,
+                disabledContainerColor = MidnightBlue.copy(alpha = 0.5f),
+                disabledContentColor = AppBg.copy(alpha = 0.7f),
+            ),
+        ) {
+            Text(
+                text = "Order Now",
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Medium,
+            )
         }
     }
 }
