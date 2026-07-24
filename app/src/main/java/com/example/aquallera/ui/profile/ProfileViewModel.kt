@@ -17,6 +17,9 @@ data class ProfileUiState(
     val displayName: String = "",
     val email: String = "",
     val phone: String = "",
+    val isEmailVerified: Boolean = false,
+    val sendingVerification: Boolean = false,
+    val verificationSent: Boolean = false,
     val loading: Boolean = true,
     val error: String? = null,
 )
@@ -48,16 +51,39 @@ class ProfileViewModel @Inject constructor(
                     displayName = user?.displayName ?: firebaseUser.displayName ?: firebaseUser.email ?: "",
                     email = firebaseUser.email ?: "",
                     phone = user?.displayPhone ?: "",
+                    isEmailVerified = authRepository.isEmailVerified(),
                     loading = false,
                 )
             } catch (e: Exception) {
                 _uiState.value = ProfileUiState(
                     displayName = firebaseUser.displayName ?: firebaseUser.email ?: "",
                     email = firebaseUser.email ?: "",
+                    isEmailVerified = authRepository.isEmailVerified(),
                     loading = false,
                     error = e.message,
                 )
             }
+        }
+    }
+
+    fun resendVerification() {
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(sendingVerification = true, verificationSent = false)
+            try {
+                authRepository.sendVerificationEmail()
+                _uiState.value = _uiState.value.copy(verificationSent = true, sendingVerification = false)
+            } catch (_: Exception) {
+                _uiState.value = _uiState.value.copy(sendingVerification = false)
+            }
+        }
+    }
+
+    fun checkVerificationStatus() {
+        viewModelScope.launch {
+            try {
+                authRepository.reloadUser()
+                _uiState.value = _uiState.value.copy(isEmailVerified = authRepository.isEmailVerified())
+            } catch (_: Exception) { }
         }
     }
 

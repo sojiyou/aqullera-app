@@ -101,4 +101,39 @@ class OrderRepository @Inject constructor(
             Result.failure(e)
         }
     }
+
+    suspend fun autoCancelRevokedOrdersForUser(userId: String) {
+        try {
+            val snapshot = firebaseDatabase.getReference("orders")
+                .orderByChild("userId")
+                .equalTo(userId)
+                .get()
+                .await()
+
+            val activeOrders = snapshot.children.mapNotNull { child ->
+                try {
+                    child.getValue(Order::class.java)?.copy(orderId = child.key ?: "")
+                } catch (_: Exception) { null }
+            }.filter { it.status in listOf("Pending", "Confirmed") }
+
+            val stationIds = activeOrders.map { it.stationId }.distinct()
+            for (stationId in stationIds) {
+                val revokedSnapshot = firebaseDatabase.getReference("waterStations")
+                    .child(stationId)
+                    .child("revokedAt")
+                    .get()
+                    .await()
+                if (revokedSnapshot.exists() && revokedSnapshot.getValue(Long::class.java) != null) {
+                    val toCancel = activeOrders.filter { it.stationId == stationId }
+                    for (order in toCancel) {
+                        firebaseDatabase.getReference("orders")
+                            .child(order.orderId)
+                            .child("status")
+                            .setValue("Cancelled")
+                            .await()
+                    }
+                }
+            }
+        } catch (_: Exception) { }
+    }
 }

@@ -151,7 +151,7 @@ app/src/main/java/com/example/aquallera/
 - [x] NotificationListener as Compose side-effect (order status toasts)
 - [x] EmailService integration (EmailJS order confirmation)
 - [x] Error handling, loading states, empty states
-- [ ] End-to-end testing with emulator
+- [x] End-to-end testing with emulator
 
 ## API / Screens Reference
 
@@ -245,8 +245,8 @@ Polish the Android UI to match the PWA reference designs.
 - [x] Order preview screen before submitting
 
 ### Orders / Profile
-- [ ] Auto-cancel orders when a station is revoked
-- [ ] Email verification status badge + resend button on Profile
+- [x] Auto-cancel orders when a station is revoked
+- [x] Email verification status badge + resend button on Profile
 
 ### Phase 7 — Part 2 Implementation
 - [x] WaterStationCard: add pricing display with colored badges
@@ -269,8 +269,8 @@ Polish the Android UI to match the PWA reference designs.
 - [x] CreateOrderScreen: date selector
 - [x] CreateOrderScreen: time slot picker
 - [x] CreateOrderScreen: order preview
-- [ ] OrdersScreen: auto-cancel revoked stations
-- [ ] ProfileScreen: email verification badge + resend
+- [x] OrdersScreen: auto-cancel revoked stations
+- [x] ProfileScreen: email verification badge + resend
 
 ---
 
@@ -335,3 +335,20 @@ Polish the Android UI to match the PWA reference designs.
 
 ### Files Changed
 - **Modified:** `CreateOrderScreen.kt`, `CreateOrderViewModel.kt`, `OrderConfirmationScreen.kt`, `OrderConfirmationViewModel.kt`, `PendingOrderStore.kt`, `OrderRepository.kt`, `PLAN.md`
+
+---
+
+## Session Summary (Jul 22, 2026) — Auto-Cancel & Email Verification
+
+### Auto-Cancel Revoked Orders
+- **OrderRepository.autoCancelRevokedOrdersForUser()**: Checks all Pending/Confirmed orders for the current user, looks up each order's station `revokedAt`, and sets status to "Cancelled" if the station is revoked
+- **OrdersViewModel**: Calls `autoCancelRevokedOrdersForUser()` before `getOrdersByUser()` on every load
+
+### ProfileScreen — Email Verification
+- Added `isEmailVerified`, `sendingVerification`, `verificationSent` to `ProfileUiState`
+- Green "Verified" badge with checkmark icon when verified; orange "Unverified" warning when not
+- "Resend Verification" button (sends email, shows "Sent!" feedback) + "Check Status" button (reloads Firebase Auth to pick up verification)
+- `ProfileViewModel.resendVerification()` and `checkVerificationStatus()` methods
+
+### Files Changed
+- **Modified:** `OrderRepository.kt`, `OrdersViewModel.kt`, `ProfileViewModel.kt`, `ProfileScreen.kt`, `PLAN.md`

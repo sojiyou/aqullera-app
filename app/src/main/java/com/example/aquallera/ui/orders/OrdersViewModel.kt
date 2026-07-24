@@ -39,6 +39,7 @@ class OrdersViewModel @Inject constructor(
         }
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(loading = true)
+            orderRepository.autoCancelRevokedOrdersForUser(user.uid)
             orderRepository.getOrdersByUser(user.uid).fold(
                 onSuccess = { orders ->
                     _uiState.value = _uiState.value.copy(orders = orders, loading = false)

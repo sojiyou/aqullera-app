@@ -19,15 +19,19 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForwardIos
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.List
 import androidx.compose.material.icons.filled.Logout
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Send
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -91,6 +95,16 @@ fun ProfileScreen(
                         text = state.email,
                         fontSize = 14.sp,
                         color = Color.Gray,
+                    )
+                }
+                if (state.email.isNotBlank()) {
+                    Spacer(modifier = Modifier.height(4.dp))
+                    VerificationBadge(
+                        isVerified = state.isEmailVerified,
+                        sending = state.sendingVerification,
+                        sent = state.verificationSent,
+                        onResend = { viewModel.resendVerification() },
+                        onCheckStatus = { viewModel.checkVerificationStatus() },
                     )
                 }
                 if (state.phone.isNotBlank()) {
@@ -170,6 +184,72 @@ private fun AvatarCircle(name: String) {
             fontSize = 28.sp,
             fontWeight = FontWeight.Bold,
         )
+    }
+}
+
+@Composable
+private fun VerificationBadge(
+    isVerified: Boolean,
+    sending: Boolean,
+    sent: Boolean,
+    onResend: () -> Unit,
+    onCheckStatus: () -> Unit,
+) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        if (isVerified) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = Icons.Default.CheckCircle,
+                    contentDescription = null,
+                    tint = Color(0xFF2E7D32),
+                    modifier = Modifier.size(18.dp),
+                )
+                Spacer(modifier = Modifier.width(4.dp))
+                Text(
+                    text = "Verified",
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = Color(0xFF2E7D32),
+                )
+            }
+        } else {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = Icons.Default.Info,
+                    contentDescription = null,
+                    tint = Color(0xFFE65100),
+                    modifier = Modifier.size(18.dp),
+                )
+                Spacer(modifier = Modifier.width(4.dp))
+                Text(
+                    text = "Unverified",
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = Color(0xFFE65100),
+                )
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                TextButton(onClick = onResend, enabled = !sending) {
+                    Icon(
+                        imageVector = Icons.Default.Send,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp),
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(if (sent) "Sent!" else if (sending) "Sending..." else "Resend Verification")
+                }
+                TextButton(onClick = onCheckStatus) {
+                    Icon(
+                        imageVector = Icons.Default.Refresh,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp),
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("Check Status")
+                }
+            }
+        }
     }
 }
 
