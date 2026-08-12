@@ -17,6 +17,7 @@ private val AppColorScheme = lightColorScheme(
     error = StatusCancelled,
 )
 
+/** App-wide color scheme and typography, applied once at the root of the activity. */
 @Composable
 fun AqualleraTheme(content: @Composable () -> Unit) {
     MaterialTheme(

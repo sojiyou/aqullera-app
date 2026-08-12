@@ -4,7 +4,6 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.aquallera.auth.data.AuthRepository
 import com.example.aquallera.core.model.Order
-import com.example.aquallera.core.util.EmailService
 import com.example.aquallera.createorder.data.PendingOrderStore
 import com.example.aquallera.orders.data.OrderRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -12,6 +11,9 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import javax.inject.Inject
 
 data class ConfirmationUiState(
@@ -21,6 +23,7 @@ data class ConfirmationUiState(
     val error: String? = null,
 )
 
+/** Backs the confirmation screen, turning the pending order into a stored order. */
 @HiltViewModel
 class OrderConfirmationViewModel @Inject constructor(
     private val pendingOrderStore: PendingOrderStore,
@@ -33,6 +36,7 @@ class OrderConfirmationViewModel @Inject constructor(
 
     val pendingOrder = pendingOrderStore.data
 
+    /** Writes the order and reports the new id, or an error, through the UI state. */
     fun confirmOrder() {
         val data = pendingOrderStore.data.value
         if (data.stationId.isBlank()) return
@@ -45,6 +49,8 @@ class OrderConfirmationViewModel @Inject constructor(
         _uiState.value = _uiState.value.copy(confirming = true, error = null)
 
         viewModelScope.launch {
+            val now = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US).format(Date())
+            val phone = authRepository.getUserPhone(user.uid)
             val order = Order(
                 stationId = data.stationId,
                 stationName = data.stationName,
@@ -52,10 +58,10 @@ class OrderConfirmationViewModel @Inject constructor(
                 userId = user.uid,
                 userEmail = user.email ?: "",
                 customerName = user.displayName ?: "",
-                customerPhone = "",
-                orderType = data.orderType.lowercase(),
-                date = data.preferredDate.ifBlank { java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).format(java.util.Date()) },
-                time = data.preferredTime.ifBlank { java.text.SimpleDateFormat("h:mm a", java.util.Locale.US).format(java.util.Date()) },
+                customerPhone = phone,
+                orderType = data.orderType,
+                date = data.preferredDate.ifBlank { SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date()) },
+                time = data.preferredTime.ifBlank { SimpleDateFormat("h:mm a", Locale.US).format(Date()) },
                 pureWaterQty = data.pureWaterQty,
                 springWaterQty = data.springWaterQty,
                 mineralWaterQty = data.mineralWaterQty,
@@ -75,13 +81,14 @@ class OrderConfirmationViewModel @Inject constructor(
                 deliveryLatitude = data.deliveryLatitude,
                 deliveryLongitude = data.deliveryLongitude,
                 paymentMethod = data.paymentMethod,
+                createdAt = now,
+                updatedAt = now,
             )
 
             orderRepository.createOrder(order).fold(
                 onSuccess = { orderId ->
                     pendingOrderStore.clear()
                     _uiState.value = ConfirmationUiState(confirmed = true, orderId = orderId)
-                    try { EmailService.sendOrderConfirmation(order.copy(orderId = orderId)) } catch (_: Exception) {}
                 },
                 onFailure = { e ->
                     _uiState.value = _uiState.value.copy(

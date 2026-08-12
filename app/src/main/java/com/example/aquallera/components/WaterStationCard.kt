@@ -33,6 +33,7 @@ import com.example.aquallera.core.theme.StatusCancelled
 import com.example.aquallera.core.theme.StatusCompleted
 import com.example.aquallera.core.theme.StatusOnDelivery
 
+/** Station card with distance, status, prices and actions (view on map / order now). */
 @Composable
 fun WaterStationCard(
     station: WaterStation,
@@ -49,9 +50,9 @@ fun WaterStationCard(
         } else ""
     }
 
-    val purePrice = station.pricing_gallon_pure
-    val springPrice = station.pricing_liter_spring ?: station.pricing_gallon_spring
-    val mineralPrice = station.pricing_gallon_mineral
+    val purePrice = station.pricing_gallon_pure?.takeIf { station.offers("pure") }
+    val springPrice = station.springPrice?.takeIf { station.offers("spring") }
+    val mineralPrice = station.pricing_gallon_mineral?.takeIf { station.offers("mineral") }
     val hasPrices = purePrice != null || springPrice != null || mineralPrice != null
 
     Card(

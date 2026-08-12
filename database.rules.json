@@ -34,6 +34,12 @@
     "orderCounter": {
       ".read": true,
       ".write": true
+    },
+    "emailVerification": {
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        ".write": "auth != null && auth.uid === $uid"
+      }
     }
   }
 }

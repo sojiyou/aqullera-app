@@ -1,5 +1,6 @@
 package com.example.aquallera.core.model
 
+/** A single water order; field names mirror the Firebase `/orders` records written by the PWA. */
 data class Order(
     val orderId: String = "",
     val referenceNumber: String = "",
@@ -33,6 +34,6 @@ data class Order(
     val additionalDetails: String = "",
     val paymentMethod: String = "Cash on Delivery",
     val status: String = "Pending",
-    val createdAt: Long = System.currentTimeMillis(),
+    val createdAt: String = "",
     val updatedAt: String = "",
 )

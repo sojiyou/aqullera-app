@@ -13,6 +13,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.example.aquallera.core.theme.MidnightBlue
 
+/** Centered spinner with an optional caption, used by every loading state. */
 @Composable
 fun LoadingIndicator(
     modifier: Modifier = Modifier,

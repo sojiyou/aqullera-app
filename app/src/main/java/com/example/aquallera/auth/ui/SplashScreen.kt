@@ -3,7 +3,6 @@ package com.example.aquallera.auth.ui
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -26,15 +25,23 @@ import com.example.aquallera.core.theme.AppBg
 import com.example.aquallera.core.theme.MidnightBlue
 import kotlinx.coroutines.delay
 
+/** Holds the splash while auth state resolves, then routes to landing, map or verification. */
 @Composable
 fun SplashScreen(
     onNavigateToLanding: () -> Unit,
     onNavigateToMap: () -> Unit,
+    onNavigateToVerifyEmail: () -> Unit,
     isLoggedIn: Boolean,
+    /** null while the verification check is still in flight — stay on the splash until it resolves. */
+    isEmailVerified: Boolean?,
 ) {
-    LaunchedEffect(Unit) {
+    LaunchedEffect(isLoggedIn, isEmailVerified) {
         delay(1500)
-        if (isLoggedIn) onNavigateToMap() else onNavigateToLanding()
+        when {
+            !isLoggedIn -> onNavigateToLanding()
+            isEmailVerified == true -> onNavigateToMap()
+            isEmailVerified == false -> onNavigateToVerifyEmail()
+        }
     }
 
     Column(

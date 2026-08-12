@@ -352,3 +352,56 @@ Polish the Android UI to match the PWA reference designs.
 
 ### Files Changed
 - **Modified:** `OrderRepository.kt`, `OrdersViewModel.kt`, `ProfileViewModel.kt`, `ProfileScreen.kt`, `PLAN.md`
+
+---
+
+## Resolved — User Location Not Accurate (Aug 13, 2026)
+
+`getUserLocation()` in `MapScreen.kt` reported a stale position instead of the current one.
+
+**Root cause:** the old fallback order asked for cached fixes first —
+`GPS_PROVIDER.lastKnownLocation` → `getLastLocation()` → `getCurrentLocation()`. A cached fix can be
+hours old, or come from a different app, so the marker showed where the device *had been*. Two
+accuracy filters (`< 100f`, `< 500f`) also discarded valid fixes, and every failure path was an
+empty `catch`/`addOnFailureListener`, so nothing surfaced when it broke.
+
+**Fix:** ask for a fresh fix first via `CurrentLocationRequest` with `setMaxUpdateAgeMillis(0)` and a
+15s `setDurationMillis`, falling back to `lastLocation` only if that yields nothing. Location-services-off
+is now detected up front (`LocationManagerCompat.isLocationEnabled`), and every failure path reports
+through an `onError` callback shown as a Toast. Added `Log.i`/`Log.w` so this is diagnosable next time.
+
+**Verified on emulator:** with the simulated position set to Manila, the old code returned the stale
+Baguio fix `16.411998,120.593`; the new code logs `Fresh fix: 14.5995,120.9842` and the marker and
+camera move to Manila.
+
+### Emulator caveat — read before chasing this again
+
+**Emulators have no GPS hardware.** They report only what is configured under
+Extended Controls (`...`) → Location, so the marker can never show your real position on an emulator.
+`adb emu geo fix <lon> <lat>` is also overridden while Extended Controls is replaying a position.
+To sanity-check on an emulator, set the location there to your real coordinates. Behaviour on real
+hardware must be confirmed on a physical Android device.
+
+---
+
+## Session Summary (Jul 25, 2026) — PWA Alignment: Markers, Callout, Location
+
+### What Changed
+- **WaterStation model**: Removed body `isOnline` getter; renamed `online` → `isOnline` with `@PropertyName("online")`; added manual raw-data override in `StationRepository` for both `online` and `isOnline` fields
+- **Orders real-time**: Added `getOrdersByUserFlow()` via `callbackFlow` + `ValueEventListener` in `OrderRepository`; `OrdersViewModel` now collects from flow instead of one-shot `.get()`
+- **Cancel button**: Red "Cancel Order" button on `OrderReceiptScreen` for Pending/Confirmed orders, wired to `OrdersViewModel.cancelOrder()`
+- **Panel empty state**: `StationBottomPanel` always visible; when filter returns 0 stations, shows empty state inside the panel
+- **Custom markers**: Created `ic_station_marker.xml` (water droplet matching PWA SVG) and `ic_user_location.xml` (blue circle) vector drawables; deleted old PNG
+- **Text halo**: White text halo (`#FFFFFF`, width 1.0) on station name labels for readability
+- **Location**: Replaced `getLastKnownLocation()` with `FusedLocationProviderClient` + fallback chain; removed NETWORK_PROVIDER fallback that returned California coordinates
+- **User marker**: Added `userManagerRef` + `user_location_icon` annotation managed separately from station annotations
+- **Callout popup**: Replaced large `StationMiniInfoCard` at top with small compact card (station name + address + View + ✕) constrained to 260dp max width, positioned near marker area
+- **Marker sizes**: Station: `maxOf(18, minOf(52, 22 + (zoom-10)*4.5))` / 96. User: `maxOf(16, minOf(48, 20 + (zoom-10)*3.5))` / 96 — ~12% larger than PWA formula
+- **Initial camera**: Map starts centered on `Constants.BAGUIO_CENTER` (Burnham Park, Baguio) at zoom 12
+
+### Emulator Install Issue
+- `gradlew.bat installDebug` fails with "No connected devices!" — emulator not running. User must start KB Android Emulator first, then run `.\gradlew.bat installDebug` from `aqullera-app/`.
+
+### Files Changed
+- **Modified:** `MapScreen.kt` (location, markers, callout, icons), `MapViewModel.kt`, `StationRepository.kt` (raw-data parsing), `OrderRepository.kt` (real-time flow), `OrderReceiptScreen.kt` (cancel button), `PLAN.md`
+- **New:** `app/src/main/res/drawable/ic_station_marker.xml`, `app/src/main/res/drawable/ic_user_location.xml`

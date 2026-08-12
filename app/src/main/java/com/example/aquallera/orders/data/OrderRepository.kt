@@ -8,6 +8,10 @@ import com.google.firebase.database.DataSnapshot
 import com.google.firebase.database.FirebaseDatabase
 import com.google.firebase.database.MutableData
 import com.google.firebase.database.Transaction
+import com.google.firebase.database.ValueEventListener
+import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.tasks.await
 import java.text.SimpleDateFormat
@@ -18,10 +22,17 @@ import javax.inject.Singleton
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 
+/**
+ * Order creation and retrieval under `/orders`.
+ *
+ * Reference numbers come from an atomic counter at `/orderCounter/{yyyyMMdd}` rather than being
+ * generated client-side, so the app and the PWA never mint the same number.
+ */
 @Singleton
 class OrderRepository @Inject constructor(
     private val firebaseDatabase: FirebaseDatabase,
 ) {
+    /** Creates an order with a freshly allocated reference number; returns the new order key. */
     suspend fun createOrder(order: Order): Result<String> {
         return try {
             val today = SimpleDateFormat("yyyyMMdd", Locale.US).format(Date())
@@ -41,6 +52,7 @@ class OrderRepository @Inject constructor(
         }
     }
 
+    /** Increments the daily counter transactionally, retrying on contention. */
     private suspend fun atomicIncrement(ref: DatabaseReference): Long = suspendCancellableCoroutine { cont ->
         ref.runTransaction(object : Transaction.Handler {
             override fun doTransaction(mutableData: MutableData): Transaction.Result {
@@ -58,16 +70,7 @@ class OrderRepository @Inject constructor(
         })
     }
 
-    suspend fun getOrderById(orderId: String): Result<Order?> {
-        return try {
-            val snapshot = firebaseDatabase.getReference("orders").child(orderId).get().await()
-            val order = snapshot.getValue(Order::class.java)
-            Result.success(order)
-        } catch (e: Exception) {
-            Result.failure(e)
-        }
-    }
-
+    /** One-shot fetch of a user's orders. Unreadable records are skipped, not fatal. */
     suspend fun getOrdersByUser(userId: String): Result<List<Order>> {
         return try {
             val snapshot = firebaseDatabase.getReference("orders")
@@ -89,6 +92,36 @@ class OrderRepository @Inject constructor(
         }
     }
 
+    /** Emits the user's orders on every change, so admin status updates appear live. */
+    fun getOrdersByUserFlow(userId: String): Flow<List<Order>> = callbackFlow {
+        val ref = firebaseDatabase.getReference("orders")
+            .orderByChild("userId")
+            .equalTo(userId)
+        val listener = object : ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) {
+                val orders = snapshot.children.mapNotNull { child ->
+                    try {
+                        child.getValue(Order::class.java)
+                    } catch (e: Exception) {
+                        Log.e("OrderRepo", "Failed to parse order[${child.key}]: ${e.message}")
+                        null
+                    }
+                }.sortedByDescending { it.createdAt }
+                trySend(orders)
+            }
+
+            override fun onCancelled(error: DatabaseError) {
+                close(error.toException())
+            }
+        }
+        ref.addValueEventListener(listener)
+        awaitClose { ref.removeEventListener(listener) }
+    }
+
+    /**
+     * Sets an order's `status`. Note this does not touch `updatedAt`, unlike the PWA, so an order
+     * cancelled from the app keeps its original timestamp.
+     */
     suspend fun updateOrderStatus(orderId: String, status: String): Result<Unit> {
         return try {
             firebaseDatabase.getReference("orders")
@@ -102,6 +135,10 @@ class OrderRepository @Inject constructor(
         }
     }
 
+    /**
+     * Cancels the user's pending or confirmed orders whose station has since been revoked,
+     * so orders cannot sit waiting on a station that no longer operates.
+     */
     suspend fun autoCancelRevokedOrdersForUser(userId: String) {
         try {
             val snapshot = firebaseDatabase.getReference("orders")

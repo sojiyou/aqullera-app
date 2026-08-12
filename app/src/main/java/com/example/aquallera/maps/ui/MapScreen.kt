@@ -4,12 +4,9 @@ import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
-import android.graphics.BitmapFactory
 import android.graphics.Canvas
-import android.graphics.ColorMatrix
-import android.graphics.ColorMatrixColorFilter
-import android.graphics.Paint
 import android.location.LocationManager
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -27,10 +24,13 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -47,11 +47,10 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -63,7 +62,6 @@ import com.example.aquallera.components.WaterStationCard
 import com.example.aquallera.core.model.WaterStation
 import com.example.aquallera.core.theme.AppBg
 import com.example.aquallera.core.theme.MidnightBlue
-import com.example.aquallera.core.theme.MistGray
 import com.example.aquallera.core.util.Constants
 import com.mapbox.geojson.Point
 import com.mapbox.maps.CameraOptions
@@ -74,8 +72,18 @@ import com.mapbox.maps.plugin.annotation.generated.PointAnnotation
 import com.mapbox.maps.plugin.annotation.generated.PointAnnotationManager
 import com.mapbox.maps.plugin.annotation.generated.PointAnnotationOptions
 import com.mapbox.maps.plugin.annotation.generated.createPointAnnotationManager
+import com.mapbox.maps.plugin.attribution.attribution
+import com.mapbox.maps.plugin.compass.compass
+import com.mapbox.maps.plugin.logo.logo
+import com.mapbox.maps.plugin.scalebar.scalebar
+import android.util.Log
+import androidx.core.location.LocationManagerCompat
+import com.google.android.gms.location.CurrentLocationRequest
+import com.google.android.gms.location.LocationServices
+import com.google.android.gms.location.Priority
 import kotlin.math.abs
 
+/** Map tab: Mapbox map with station markers, status filter and a bottom station panel. */
 @Composable
 fun MapScreen(
     onStationTap: (stationId: String) -> Unit = {},
@@ -84,15 +92,25 @@ fun MapScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val context = LocalContext.current
-    var showHowToOrder by remember { mutableStateOf(false) }
+    var panelCollapseCounter by remember { mutableStateOf(0) }
+    var flyToUserTrigger by remember { mutableStateOf(0) }
+
+    val onUserLocationResult: (Double, Double) -> Unit = { lat, lng ->
+        viewModel.setUserLocation(lat, lng)
+        flyToUserTrigger++
+    }
+
+    val onUserLocationError: (String) -> Unit = { message ->
+        Toast.makeText(context, message, Toast.LENGTH_LONG).show()
+    }
 
     val locationPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestMultiplePermissions(),
     ) { permissions ->
         if (permissions.all { it.value }) {
-            getUserLocation(context) { lat, lng ->
-                viewModel.setUserLocation(lat, lng)
-            }
+            getUserLocation(context, onUserLocationResult, onUserLocationError)
+        } else {
+            onUserLocationError("Location permission is needed to show where you are.")
         }
     }
 
@@ -116,8 +134,13 @@ fun MapScreen(
         MapboxMapView(
             stations = uiState.stations,
             onStationSelected = { station -> viewModel.selectStation(station) },
+            selectedStation = uiState.selectedStation,
+            onDismissStation = { viewModel.selectStation(null) },
             flyToStationId = uiState.flyToStationId,
             onFlyToCompleted = { viewModel.clearFlyToStation() },
+            flyToUserTrigger = flyToUserTrigger,
+            userLat = uiState.userLat,
+            userLng = uiState.userLng,
             modifier = Modifier.fillMaxSize(),
         )
 
@@ -154,17 +177,6 @@ fun MapScreen(
                     )
                 }
             }
-            Text(
-                text = "How to Order",
-                color = Color.White,
-                fontSize = 12.sp,
-                fontWeight = FontWeight.SemiBold,
-                modifier = Modifier
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(MidnightBlue)
-                    .clickable { showHowToOrder = true }
-                    .padding(horizontal = 10.dp, vertical = 6.dp),
-            )
         }
 
         Box(
@@ -177,9 +189,7 @@ fun MapScreen(
                     val hasFine = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION)
                     val hasCoarse = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION)
                     if (hasFine == PackageManager.PERMISSION_GRANTED || hasCoarse == PackageManager.PERMISSION_GRANTED) {
-                        getUserLocation(context) { lat, lng ->
-                            viewModel.setUserLocation(lat, lng)
-                        }
+                        getUserLocation(context, onUserLocationResult, onUserLocationError)
                     } else {
                         locationPermissionLauncher.launch(
                             arrayOf(
@@ -193,44 +203,77 @@ fun MapScreen(
         }
 
         uiState.selectedStation?.let { station ->
-            StationMiniInfoCard(
-                station = station,
-                onView = { onStationTap(station.id) },
-                onDismiss = { viewModel.selectStation(null) },
+            Box(
                 modifier = Modifier
                     .align(Alignment.TopCenter)
-                    .padding(start = 16.dp, end = 16.dp, top = 124.dp),
-            )
-        }
-
-        if (uiState.filteredStations.isNotEmpty()) {
-            StationBottomPanel(
-                stations = uiState.filteredStations,
-                statusFilter = uiState.statusFilter,
-                userLat = uiState.userLat,
-                userLng = uiState.userLng,
-                onStationTap = onStationTap,
-                onFilterChange = { viewModel.setFilter(it) },
-                onViewOnMap = { station ->
-                    viewModel.selectStation(station)
-                    viewModel.flyToStation(station.id)
-                },
-                onOrderNow = { onOrderNow(it) },
-                modifier = Modifier.align(Alignment.BottomCenter),
-            )
-        } else {
-            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Text(
-                    text = "No water stations available",
-                    color = MidnightBlue.copy(alpha = 0.7f),
-                    fontSize = 16.sp,
-                )
+                    .padding(top = 180.dp, start = 16.dp, end = 16.dp)
+                    .widthIn(max = 260.dp)
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(Color.White)
+                    .border(0.5.dp, Color.LightGray, RoundedCornerShape(8.dp))
+                    .padding(horizontal = 8.dp, vertical = 6.dp),
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = station.stationName,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MidnightBlue,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        if (station.address.isNotBlank()) {
+                            Text(
+                                text = station.address,
+                                fontSize = 10.sp,
+                                color = Color.Gray,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        text = "View",
+                        color = Color.White,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Medium,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(MidnightBlue)
+                            .clickable { onStationTap(station.id) }
+                            .padding(horizontal = 6.dp, vertical = 3.dp),
+                    )
+                    Spacer(modifier = Modifier.width(2.dp))
+                    Text(
+                        text = "\u2715",
+                        color = Color.Gray,
+                        fontSize = 11.sp,
+                        modifier = Modifier
+                            .clickable { viewModel.selectStation(null) }
+                            .padding(4.dp),
+                    )
+                }
             }
         }
-    }
 
-    if (showHowToOrder) {
-        HowToOrderDialog(onClose = { showHowToOrder = false })
+        StationBottomPanel(
+            stations = uiState.filteredStations,
+            statusFilter = uiState.statusFilter,
+            userLat = uiState.userLat,
+            userLng = uiState.userLng,
+            onStationTap = onStationTap,
+            onFilterChange = { viewModel.setFilter(it) },
+            onViewOnMap = { station ->
+                panelCollapseCounter++
+                viewModel.selectStation(station)
+                viewModel.flyToStation(station.id)
+            },
+            onOrderNow = { onOrderNow(it) },
+            collapseCounter = panelCollapseCounter,
+            modifier = Modifier.align(Alignment.BottomCenter),
+        )
     }
 }
 
@@ -276,98 +319,54 @@ private fun LocationButton(onClick: () -> Unit) {
 }
 
 @Composable
-private fun StationMiniInfoCard(
-    station: WaterStation,
-    onView: () -> Unit,
-    onDismiss: () -> Unit,
-    modifier: Modifier = Modifier,
+private fun StationFilterDropdown(
+    selected: StationFilter,
+    onSelect: (StationFilter) -> Unit,
 ) {
-    Box(
-        modifier = modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
-            .background(Color.White)
-            .border(1.dp, Color.LightGray, RoundedCornerShape(12.dp)),
-    ) {
+    var expanded by remember { mutableStateOf(false) }
+
+    Box {
         Row(
             modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 10.dp),
+                .clip(RoundedCornerShape(8.dp))
+                .background(Color.White)
+                .border(1.dp, Color.LightGray, RoundedCornerShape(8.dp))
+                .clickable { expanded = true }
+                .padding(horizontal = 10.dp, vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = station.stationName,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 14.sp,
-                    color = MidnightBlue,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                if (station.address.isNotBlank()) {
-                    Text(
-                        text = station.address,
-                        fontSize = 12.sp,
-                        color = Color.Gray,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                }
-            }
-            Spacer(modifier = Modifier.width(8.dp))
             Text(
-                text = "View",
-                color = Color.White,
+                text = selected.label,
                 fontSize = 12.sp,
-                fontWeight = FontWeight.Medium,
-                modifier = Modifier
-                    .clip(RoundedCornerShape(6.dp))
-                    .background(MidnightBlue)
-                    .clickable(onClick = onView)
-                    .padding(horizontal = 12.dp, vertical = 6.dp),
+                color = MidnightBlue,
             )
             Spacer(modifier = Modifier.width(4.dp))
-            Text(
-                text = "\u2715",
-                color = Color.Gray,
-                fontSize = 14.sp,
-                modifier = Modifier
-                    .clickable(onClick = onDismiss)
-                    .padding(4.dp),
-            )
+            Text(text = "\u25BC", fontSize = 8.sp, color = MidnightBlue)
+        }
+        DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false },
+        ) {
+            StationFilter.entries.forEach { filter ->
+                DropdownMenuItem(
+                    text = {
+                        Text(
+                            text = filter.label,
+                            fontSize = 13.sp,
+                            color = if (filter == selected) MidnightBlue else Color.DarkGray,
+                            fontWeight = if (filter == selected) FontWeight.SemiBold else FontWeight.Normal,
+                        )
+                    },
+                    onClick = {
+                        onSelect(filter)
+                        expanded = false
+                    },
+                )
+            }
         }
     }
 }
 
-@Composable
-private fun FilterChipsRow(
-    selected: StationFilter,
-    onSelect: (StationFilter) -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    Row(
-        modifier = modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
-    ) {
-        StationFilter.entries.forEach { filter ->
-            val isSelected = filter == selected
-            Box(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(16.dp))
-                    .background(if (isSelected) MidnightBlue else MistGray)
-                    .clickable { onSelect(filter) }
-                    .padding(horizontal = 14.dp, vertical = 6.dp),
-            ) {
-                Text(
-                    text = filter.label,
-                    fontSize = 12.sp,
-                    fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
-                    color = if (isSelected) Color.White else Color.DarkGray,
-                )
-            }
-        }
-    }
-}
 
 @Composable
 private fun StationBottomPanel(
@@ -379,6 +378,7 @@ private fun StationBottomPanel(
     onFilterChange: (StationFilter) -> Unit,
     onViewOnMap: (WaterStation) -> Unit = {},
     onOrderNow: (String) -> Unit = {},
+    collapseCounter: Int = 0,
     modifier: Modifier = Modifier,
 ) {
     val density = LocalDensity.current
@@ -390,6 +390,12 @@ private fun StationBottomPanel(
     val peekHeight = 60.dp
 
     var sheetHeight by remember { mutableStateOf(peekHeight) }
+
+    LaunchedEffect(collapseCounter) {
+        if (collapseCounter > 0) {
+            sheetHeight = peekHeight
+        }
+    }
 
     Column(
         modifier = modifier
@@ -457,7 +463,7 @@ private fun StationBottomPanel(
                 fontSize = 14.sp,
                 fontWeight = FontWeight.Bold,
             )
-            FilterChipsRow(
+            StationFilterDropdown(
                 selected = statusFilter,
                 onSelect = onFilterChange,
             )
@@ -466,8 +472,24 @@ private fun StationBottomPanel(
         Spacer(modifier = Modifier.height(8.dp))
 
         LazyColumn(modifier = Modifier.weight(1f)) {
-            items(stations, key = { it.id }) { station ->
-                WaterStationCard(
+            if (stations.isEmpty()) {
+                item {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 48.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text(
+                            text = "No stations match this filter",
+                            color = MidnightBlue.copy(alpha = 0.5f),
+                            fontSize = 14.sp,
+                        )
+                    }
+                }
+            } else {
+                items(stations, key = { it.id }) { station ->
+                    WaterStationCard(
                     station = station,
                     userLat = userLat,
                     userLng = userLng,
@@ -476,6 +498,7 @@ private fun StationBottomPanel(
                     onOrderNow = { onOrderNow(station.id) },
                     modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
                 )
+                }
             }
         }
     }
@@ -485,20 +508,34 @@ private fun StationBottomPanel(
 private fun MapboxMapView(
     stations: List<WaterStation>,
     onStationSelected: (WaterStation) -> Unit,
+    selectedStation: WaterStation? = null,
+    onDismissStation: () -> Unit = {},
     flyToStationId: String? = null,
     onFlyToCompleted: () -> Unit = {},
+    flyToUserTrigger: Int = 0,
+    userLat: Double? = null,
+    userLng: Double? = null,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
     val mapView = remember { MapView(context) }
     val managerRef = remember { mutableStateOf<PointAnnotationManager?>(null) }
+    val userManagerRef = remember { mutableStateOf<PointAnnotationManager?>(null) }
     val styleReady = remember { mutableStateOf(false) }
 
+    /** Station-marker scale (relative to the 96px source bitmap) for the current zoom. */
     fun iconSizeForZoom(zoom: Double): Double {
-        val sizePx = maxOf(16.0, minOf(48.0, 20.0 + (zoom - 10.0) * 4.0))
-        return sizePx / 32.0
+        val sizePx = maxOf(18.0, minOf(52.0, 22.0 + (zoom - 10.0) * 4.5))
+        return sizePx / 96.0
     }
 
+    /** User-marker scale (relative to the 96px source bitmap) for the current zoom. */
+    fun userIconSizeForZoom(zoom: Double): Double {
+        val sizePx = maxOf(16.0, minOf(48.0, 20.0 + (zoom - 10.0) * 3.5))
+        return sizePx / 96.0
+    }
+
+    /** Station-label size in density-independent points; hidden until the map is zoomed in. */
     fun textSizeForZoom(zoom: Double): Double = when {
         zoom < 13 -> 0.0
         zoom < 15 -> 8.0
@@ -506,33 +543,34 @@ private fun MapboxMapView(
         else -> 12.0
     }
 
-    fun adjustMarkerBitmap(original: Bitmap, contrast: Float = 1.4f, brightness: Float = 0.0f): Bitmap {
-        val result = original.copy(Bitmap.Config.ARGB_8888, true)
-        val canvas = Canvas(result)
-        val cm = ColorMatrix().apply {
-            val t = 0.5f * (1f - contrast) + brightness
-            set(floatArrayOf(
-                contrast, 0f, 0f, 0f, t,
-                0f, contrast, 0f, 0f, t,
-                0f, 0f, contrast, 0f, t,
-                0f, 0f, 0f, 1f, 0f,
-            ))
-        }
-        val paint = Paint().apply { colorFilter = ColorMatrixColorFilter(cm) }
-        canvas.drawBitmap(original, 0f, 0f, paint)
-        return result
+    /** Renders a vector drawable into a bitmap so it can be used as a map annotation image. */
+    fun drawableToBitmap(drawableRes: Int, widthPx: Int, heightPx: Int): Bitmap? {
+        val drawable = context.resources.getDrawable(drawableRes, context.theme) ?: return null
+        val bitmap = Bitmap.createBitmap(widthPx, heightPx, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(bitmap)
+        drawable.setBounds(0, 0, canvas.width, canvas.height)
+        drawable.draw(canvas)
+        return bitmap
     }
 
     LaunchedEffect(Unit) {
         val mapboxMap = mapView.mapboxMap
-        mapboxMap.loadStyleUri(Style.MAPBOX_STREETS) { style ->
-            val original = BitmapFactory.decodeResource(context.resources, R.drawable.ic_station_marker)
-            val markerBitmap = original?.let { adjustMarkerBitmap(Bitmap.createScaledBitmap(it, 96, 96, true)) }
+        mapboxMap.loadStyle(Style.MAPBOX_STREETS) { style ->
+            val markerBitmap = drawableToBitmap(R.drawable.ic_station_marker, 96, 96)
             if (markerBitmap != null) {
                 style.addImage("water_station_icon", markerBitmap)
             }
+            val userMarkerBitmap = drawableToBitmap(R.drawable.ic_user_location, 96, 96)
+            if (userMarkerBitmap != null) {
+                style.addImage("user_location_icon", userMarkerBitmap)
+            }
             managerRef.value = mapView.annotations.createPointAnnotationManager()
+            userManagerRef.value = mapView.annotations.createPointAnnotationManager()
             styleReady.value = true
+            mapView.attribution?.enabled = false
+            mapView.logo?.enabled = false
+            mapView.compass?.enabled = false
+            mapView.scalebar?.enabled = false
         }
         mapboxMap.subscribeCameraChanged { cameraChanged ->
             val zoom = cameraChanged.cameraState.zoom
@@ -542,6 +580,13 @@ private fun MapboxMapView(
                 mgr.annotations.forEach { a ->
                     a.iconSize = iSize
                     a.textSize = tSize
+                }
+                mgr.update(mgr.annotations)
+            }
+            userManagerRef.value?.let { mgr ->
+                val uSize = userIconSizeForZoom(zoom)
+                mgr.annotations.forEach { a ->
+                    a.iconSize = uSize
                 }
                 mgr.update(mgr.annotations)
             }
@@ -564,9 +609,9 @@ private fun MapboxMapView(
                     .withIconSize(iconSizeForZoom(zoom))
                     .withTextField(station.stationName)
                     .withTextSize(textSizeForZoom(zoom))
-                    .withTextColor("#424242")
-                    .withTextHaloColor("#00000000")
-                    .withTextHaloWidth(0.0)
+                    .withTextColor("#191970")
+                    .withTextHaloColor("#FFFFFF")
+                    .withTextHaloWidth(1.0)
                     .withTextOffset(listOf(0.0, -3.5))
             }
         }
@@ -578,13 +623,20 @@ private fun MapboxMapView(
             stationMap[ann]?.let { onStationSelected(it) }
             true
         }
-        if (stations.isNotEmpty() && flyToStationId == null) {
-            mapView.mapboxMap.setCamera(
-                CameraOptions.Builder()
-                    .center(Point.fromLngLat(stations.first().longitude, stations.first().latitude))
-                    .zoom(12.0)
-                    .build()
-            )
+    }
+
+    LaunchedEffect(userLat, userLng, styleReady.value) {
+        if (!styleReady.value) return@LaunchedEffect
+        val mgr = userManagerRef.value ?: return@LaunchedEffect
+        mgr.delete(mgr.annotations.toList())
+        if (userLat != null && userLng != null) {
+            val zoom = mapView.mapboxMap.cameraState.zoom
+            val point = Point.fromLngLat(userLng, userLat)
+            val annotation = PointAnnotationOptions()
+                .withPoint(point)
+                .withIconImage("user_location_icon")
+                .withIconSize(userIconSizeForZoom(zoom))
+            mgr.create(annotation)
         }
     }
 
@@ -598,6 +650,17 @@ private fun MapboxMapView(
                 .build()
         )
         onFlyToCompleted()
+    }
+
+    LaunchedEffect(flyToUserTrigger) {
+        if (flyToUserTrigger > 0 && userLat != null && userLng != null) {
+            mapView.mapboxMap.setCamera(
+                CameraOptions.Builder()
+                    .center(Point.fromLngLat(userLng, userLat))
+                    .zoom(14.0)
+                    .build()
+            )
+        }
     }
 
     AndroidView(
@@ -614,111 +677,63 @@ private fun MapboxMapView(
     )
 }
 
-@Composable
-private fun HowToOrderDialog(onClose: () -> Unit) {
-    val steps = listOf(
-        HowToStep(1, "Select a Water Station", "Browse stations on the map or list below. Tap a station card to see details."),
-        HowToStep(2, "Choose Water Type and Quantity", "Select Pure, Spring, or Mineral water. Adjust quantities using + and - buttons."),
-        HowToStep(3, "Select Pickup or Delivery", "Choose Delivery (with location) or Pickup. Your address will be used for delivery."),
-        HowToStep(4, "Confirm Your Order", "Review your order summary, then tap Confirm. Payment is Cash on Delivery."),
-        HowToStep(5, "Track Your Order", "Monitor your order status in the Orders tab. You'll get notified on status changes."),
-    )
-
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color.Black.copy(alpha = 0.5f))
-            .clickable(onClick = onClose),
-        contentAlignment = Alignment.Center,
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 32.dp)
-                .clip(RoundedCornerShape(16.dp))
-                .background(MidnightBlue)
-                .clickable(enabled = false) { }
-                .padding(20.dp),
-        ) {
-            Text(
-                text = "How to Order Water",
-                color = Color.White,
-                fontSize = 20.sp,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(bottom = 16.dp),
-            )
-            steps.forEach { step ->
-                Row(
-                    modifier = Modifier.padding(bottom = 12.dp),
-                    verticalAlignment = Alignment.Top,
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(36.dp)
-                            .clip(CircleShape)
-                            .background(com.example.aquallera.core.theme.LightYellow),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Text(
-                            text = "${step.number}",
-                            fontWeight = FontWeight.Bold,
-                            color = MidnightBlue,
-                            fontSize = 14.sp,
-                        )
-                    }
-                    Spacer(modifier = Modifier.width(12.dp))
-                    Column {
-                        Text(
-                            text = step.title,
-                            color = MistGray,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 14.sp,
-                        )
-                        Text(
-                            text = step.description,
-                            color = Color.White.copy(alpha = 0.8f),
-                            fontSize = 12.sp,
-                        )
-                    }
-                }
-            }
-            Text(
-                text = "Got It!",
-                color = MidnightBlue,
-                fontWeight = FontWeight.Bold,
-                fontSize = 14.sp,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(MistGray)
-                    .clickable(onClick = onClose)
-                    .padding(vertical = 12.dp),
-                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-            )
-        }
+/**
+ * Fetches the device's current position, one shot per call.
+ *
+ * Asks for a genuinely fresh fix first (maxUpdateAge = 0) and only falls back to the cached
+ * one if that fails — the previous order round-tripped through `getLastLocation()`, which
+ * could hand back a fix from hours ago or from another app entirely.
+ *
+ * Note: emulators have no GPS hardware. They report whatever position is configured under
+ * Extended Controls > Location, so this can only ever show a simulated spot there.
+ */
+fun getUserLocation(
+    context: Context,
+    onResult: (Double, Double) -> Unit,
+    onError: (String) -> Unit = {},
+) {
+    val lm = context.getSystemService(Context.LOCATION_SERVICE) as LocationManager
+    if (!LocationManagerCompat.isLocationEnabled(lm)) {
+        onError("Location is turned off. Turn it on in Settings to see where you are.")
+        return
     }
-}
 
-private data class HowToStep(val number: Int, val title: String, val description: String)
+    val client = LocationServices.getFusedLocationProviderClient(context)
+    val request = CurrentLocationRequest.Builder()
+        .setPriority(Priority.PRIORITY_HIGH_ACCURACY)
+        .setDurationMillis(15_000)
+        .setMaxUpdateAgeMillis(0)
+        .build()
 
-fun getUserLocation(context: Context, onResult: (Double, Double) -> Unit) {
     try {
-        val locationManager = context.getSystemService(Context.LOCATION_SERVICE) as LocationManager
-        val hasGps = locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)
-        val hasNetwork = locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)
-        var location: android.location.Location? = null
-        if (hasGps) {
-            try {
-                location = locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER)
-            } catch (_: SecurityException) { }
-        }
-        if (location == null && hasNetwork) {
-            try {
-                location = locationManager.getLastKnownLocation(LocationManager.NETWORK_PROVIDER)
-            } catch (_: SecurityException) { }
-        }
-        if (location != null) {
-            onResult(location.latitude, location.longitude)
-        }
-    } catch (_: Exception) { }
+        client.getCurrentLocation(request, null)
+            .addOnSuccessListener { fresh ->
+                if (fresh != null) {
+                    Log.i("MapScreen", "Fresh fix: ${fresh.latitude},${fresh.longitude} acc=${fresh.accuracy}")
+                    onResult(fresh.latitude, fresh.longitude)
+                    return@addOnSuccessListener
+                }
+                // No fresh fix within the window — fall back to the last known one.
+                client.lastLocation
+                    .addOnSuccessListener { cached ->
+                        if (cached != null) {
+                            Log.i("MapScreen", "Cached fix: ${cached.latitude},${cached.longitude}")
+                            onResult(cached.latitude, cached.longitude)
+                        } else {
+                            onError("Couldn't get a GPS fix. Try again somewhere with a clearer view of the sky.")
+                        }
+                    }
+                    .addOnFailureListener { e ->
+                        Log.w("MapScreen", "lastLocation failed", e)
+                        onError("Couldn't get your location. Please try again.")
+                    }
+            }
+            .addOnFailureListener { e ->
+                Log.w("MapScreen", "getCurrentLocation failed", e)
+                onError("Couldn't get your location. Please try again.")
+            }
+    } catch (e: SecurityException) {
+        Log.w("MapScreen", "Missing location permission", e)
+        onError("Location permission is needed to show where you are.")
+    }
 }

@@ -5,13 +5,16 @@ import androidx.lifecycle.viewModelScope
 import com.example.aquallera.core.model.WaterStation
 import com.example.aquallera.stations.data.StationRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
+/** The All/Online/Offline/Pending choices on the map's filter bar. */
 enum class StationFilter(val label: String) {
     ALL("All"),
     ONLINE("Online"),
@@ -40,6 +43,7 @@ data class MapUiState(
         }
 }
 
+/** Backs the map: station list, status filter, selection and the user-location marker. */
 @HiltViewModel
 class MapViewModel @Inject constructor(
     private val stationRepository: StationRepository,
@@ -48,43 +52,59 @@ class MapViewModel @Inject constructor(
     private val _uiState = MutableStateFlow(MapUiState())
     val uiState: StateFlow<MapUiState> = _uiState.asStateFlow()
 
+    private var loadJob: Job? = null
+
     init {
         loadStations()
     }
 
+    /**
+     * Subscribes to the station list. Any previous subscription is cancelled first so [retry]
+     * cannot leave two collectors running.
+     */
     private fun loadStations() {
-        viewModelScope.launch {
-            stationRepository.getAllStationsFlow().collect { stations ->
-                _uiState.update { it.copy(stations = stations, loading = false) }
-            }
+        loadJob?.cancel()
+        loadJob = viewModelScope.launch {
+            _uiState.update { it.copy(loading = true, error = null) }
+            stationRepository.getAllStationsFlow()
+                .catch { e ->
+                    _uiState.update {
+                        it.copy(loading = false, error = e.message ?: "Failed to load water stations")
+                    }
+                }
+                .collect { stations ->
+                    _uiState.update { it.copy(stations = stations, loading = false, error = null) }
+                }
         }
     }
 
+    /** Switches the All/Online/Offline/Pending filter. Filtering is local, so no refetch. */
     fun setFilter(filter: StationFilter) {
         _uiState.update { it.copy(statusFilter = filter) }
     }
 
+    /** Selects the station shown in the map callout, or clears it when null. */
     fun selectStation(station: WaterStation?) {
         _uiState.update { it.copy(selectedStation = station) }
     }
 
+    /** Records the resolved device position, which draws the blue marker. */
     fun setUserLocation(lat: Double, lng: Double) {
         _uiState.update { it.copy(userLat = lat, userLng = lng) }
     }
 
+    /** Requests a camera move to a station; the map clears the request once handled. */
     fun flyToStation(stationId: String) {
         _uiState.update { it.copy(flyToStationId = stationId) }
     }
 
+    /** Acknowledges a completed camera move so it does not repeat on recomposition. */
     fun clearFlyToStation() {
         _uiState.update { it.copy(flyToStationId = null) }
     }
 
-    fun clearError() {
-        _uiState.update { it.copy(error = null) }
-    }
-
+    /** Re-subscribes after a load failure — the Retry button in the error state calls this. */
     fun retry() {
-        // no-op: flow auto-refreshes
+        loadStations()
     }
 }

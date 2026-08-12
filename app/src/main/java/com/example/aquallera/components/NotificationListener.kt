@@ -15,6 +15,7 @@ import dagger.hilt.InstallIn
 import dagger.hilt.android.EntryPointAccessors
 import dagger.hilt.components.SingletonComponent
 
+/** Invisible listener that toasts order status changes for the signed-in user. */
 @Composable
 fun NotificationListener() {
     val context = LocalContext.current
@@ -69,6 +70,7 @@ fun NotificationListener() {
     }
 }
 
+/** Hilt entry point so the composable can reach singletons without a ViewModel. */
 @EntryPoint
 @InstallIn(SingletonComponent::class)
 interface NotificationListenerEntryPoint {

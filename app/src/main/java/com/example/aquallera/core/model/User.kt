@@ -1,5 +1,6 @@
 package com.example.aquallera.core.model
 
+/** Profile row under `/users`; keeps both the old (name/number) and new field spellings. */
 data class User(
     val uid: String = "",
     val fullName: String = "",

@@ -24,6 +24,7 @@ data class ProfileUiState(
     val error: String? = null,
 )
 
+/** Backs the Profile tab: identity, verification badge and sign-out. */
 @HiltViewModel
 class ProfileViewModel @Inject constructor(
     private val authRepository: AuthRepository,
@@ -37,6 +38,7 @@ class ProfileViewModel @Inject constructor(
         loadProfile()
     }
 
+    /** Loads the profile row plus the shared verification flag. */
     private fun loadProfile() {
         val firebaseUser = authRepository.getCurrentUser() ?: run {
             _uiState.value = ProfileUiState(error = "Not logged in", loading = false)
@@ -66,11 +68,12 @@ class ProfileViewModel @Inject constructor(
         }
     }
 
+    /** Issues a fresh verification code by email. */
     fun resendVerification() {
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(sendingVerification = true, verificationSent = false)
             try {
-                authRepository.sendVerificationEmail()
+                authRepository.sendVerificationCode()
                 _uiState.value = _uiState.value.copy(verificationSent = true, sendingVerification = false)
             } catch (_: Exception) {
                 _uiState.value = _uiState.value.copy(sendingVerification = false)
@@ -78,15 +81,16 @@ class ProfileViewModel @Inject constructor(
         }
     }
 
+    /** Re-reads the verification flag, for when the code was entered on another device. */
     fun checkVerificationStatus() {
         viewModelScope.launch {
             try {
-                authRepository.reloadUser()
                 _uiState.value = _uiState.value.copy(isEmailVerified = authRepository.isEmailVerified())
             } catch (_: Exception) { }
         }
     }
 
+    /** Clears the session; the caller navigates back to the landing screen. */
     fun signOut() {
         authRepository.signOut()
     }

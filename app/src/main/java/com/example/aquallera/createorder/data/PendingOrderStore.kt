@@ -30,16 +30,24 @@ data class PendingOrderData(
     val deliveryLongitude: Double = 0.0,
 )
 
+/**
+ * Holds the in-progress order between the Create Order and Confirmation screens.
+ *
+ * In-memory only: an order abandoned before confirmation is intentionally lost rather than
+ * persisted, so nothing half-finished can be submitted after the app restarts.
+ */
 @Singleton
 class PendingOrderStore @Inject constructor() {
 
     private val _data = MutableStateFlow(PendingOrderData())
     val data: StateFlow<PendingOrderData> = _data.asStateFlow()
 
+    /** Stores the order awaiting confirmation, replacing any previous one. */
     fun set(order: PendingOrderData) {
         _data.value = order
     }
 
+    /** Discards the pending order, called once it has been submitted. */
     fun clear() {
         _data.value = PendingOrderData()
     }

@@ -39,11 +39,20 @@ data class SignupUiState(
 
 data class VerifyEmailUiState(
     val email: String? = null,
-    val statusMsg: String? = null,
+    val code: String = "",
+    val error: String? = null,
+    val verifying: Boolean = false,
     val sending: Boolean = false,
-    val verified: Boolean = false,
+    val cooldown: Int = 0,
+    /** Set once the code is accepted — the screen then shows the data privacy notice. */
+    val showPrivacy: Boolean = false,
 )
 
+/**
+ * Backs the whole auth flow: landing, login, signup and the 6-digit email verification.
+ * Auth state comes from a Firebase listener rather than a one-shot check, so signing out and
+ * back in cannot leave stale state behind.
+ */
 @HiltViewModel
 class AuthViewModel @Inject constructor(
     private val authRepository: AuthRepository,
@@ -62,14 +71,26 @@ class AuthViewModel @Inject constructor(
     private val _verifyState = MutableStateFlow(VerifyEmailUiState())
     val verifyState: StateFlow<VerifyEmailUiState> = _verifyState.asStateFlow()
 
-    private var authListener: com.google.firebase.auth.FirebaseAuth.AuthStateListener? = null
+    /** null while the RTDB check is in flight, so callers can wait instead of assuming unverified. */
+    private val _emailVerified = MutableStateFlow<Boolean?>(null)
+    val emailVerified: StateFlow<Boolean?> = _emailVerified.asStateFlow()
+
+    private var authListener: FirebaseAuth.AuthStateListener? = null
 
     init {
-        authListener = com.google.firebase.auth.FirebaseAuth.AuthStateListener { firebaseAuth ->
+        authListener = FirebaseAuth.AuthStateListener { firebaseAuth ->
             val user = firebaseAuth.currentUser
             _authState.value = if (user != null) AuthState.Authenticated(user) else AuthState.Unauthenticated
+            if (user != null) refreshEmailVerified() else _emailVerified.value = null
         }
         firebaseAuth.addAuthStateListener(authListener!!)
+    }
+
+    /** Re-reads the verification flag from the database into [emailVerified]. */
+    fun refreshEmailVerified() {
+        viewModelScope.launch {
+            _emailVerified.value = authRepository.isEmailVerified()
+        }
     }
 
     override fun onCleared() {
@@ -77,14 +98,17 @@ class AuthViewModel @Inject constructor(
         authListener?.let { firebaseAuth.removeAuthStateListener(it) }
     }
 
+    /** Updates the login email and clears any previous error. */
     fun onLoginEmailChanged(email: String) {
         _loginState.value = _loginState.value.copy(email = email, error = null)
     }
 
+    /** Updates the login password and clears any previous error. */
     fun onLoginPasswordChanged(password: String) {
         _loginState.value = _loginState.value.copy(password = password, error = null)
     }
 
+    /** Validates the form and signs in. The auth listener then drives navigation. */
     fun login() {
         val state = _loginState.value
         if (state.email.isBlank() || state.password.isBlank()) {
@@ -99,6 +123,7 @@ class AuthViewModel @Inject constructor(
                 onSuccess = { user ->
                     _loginState.value = _loginState.value.copy(loading = false)
                     _authState.value = AuthState.Authenticated(user)
+                    _verifyState.value = VerifyEmailUiState(email = user.email)
                 },
                 onFailure = { e ->
                     val err = if (e is Exception) e else Exception(e)
@@ -111,6 +136,7 @@ class AuthViewModel @Inject constructor(
         }
     }
 
+    /** Updates one signup field by name; the phone field is digit-only and capped at 11. */
     fun onSignupFieldChanged(field: String, value: String) {
         val current = _signupState.value
         _signupState.value = when (field) {
@@ -123,6 +149,10 @@ class AuthViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Validates the form, rejects emails or phone numbers already in use, creates the account
+     * and profile row, then sends the first verification code.
+     */
     fun signup() {
         val state = _signupState.value
 
@@ -191,7 +221,7 @@ class AuthViewModel @Inject constructor(
                             email = state.email,
                             number = state.number,
                         )
-                        authRepository.sendVerificationEmail()
+                        authRepository.sendVerificationCode()
                         _authState.value = AuthState.Authenticated(firebaseUser)
                         _signupState.value = _signupState.value.copy(loading = false, error = null)
                         _verifyState.value = VerifyEmailUiState(email = state.email)
@@ -213,39 +243,82 @@ class AuthViewModel @Inject constructor(
         }
     }
 
-    fun resendVerification() {
+    /** Keeps only digits, capped at the 6 the code requires. */
+    fun onCodeChanged(value: String) {
+        _verifyState.value = _verifyState.value.copy(
+            code = value.filter { it.isDigit() }.take(6),
+            error = null,
+        )
+    }
+
+    /** Checks the entered code; on success shows the privacy notice instead of navigating away. */
+    fun verifyCode() {
+        val code = _verifyState.value.code
+        if (code.length != 6) return
         viewModelScope.launch {
-            _verifyState.value = _verifyState.value.copy(sending = true, statusMsg = null)
+            _verifyState.value = _verifyState.value.copy(verifying = true, error = null)
             try {
-                authRepository.sendVerificationEmail()
+                val error = authRepository.verifyCode(code)
                 _verifyState.value = _verifyState.value.copy(
-                    sending = false,
-                    statusMsg = "Verification email sent! Check your inbox.",
+                    verifying = false,
+                    error = error,
+                    showPrivacy = error == null,
                 )
-            } catch (e: Exception) {
+                if (error == null) refreshEmailVerified()
+            } catch (_: Exception) {
                 _verifyState.value = _verifyState.value.copy(
-                    sending = false,
-                    statusMsg = "Failed to send verification email. Try again later.",
+                    verifying = false,
+                    error = "Verification failed. Please try again.",
                 )
             }
         }
     }
 
-    fun startVerificationPolling() {
+    /** Issues a new code, ignored while a send is in flight or the cooldown is running. */
+    fun resendVerification() {
+        if (_verifyState.value.cooldown > 0 || _verifyState.value.sending) return
         viewModelScope.launch {
-            while (true) {
-                delay(5000)
-                try {
-                    authRepository.reloadUser()
-                    if (authRepository.isEmailVerified()) {
-                        _verifyState.value = _verifyState.value.copy(verified = true)
-                        break
-                    }
-                } catch (_: Exception) {}
+            _verifyState.value = _verifyState.value.copy(sending = true, error = null)
+            try {
+                authRepository.sendVerificationCode()
+                _verifyState.value = _verifyState.value.copy(sending = false)
+                startCooldown()
+            } catch (_: Exception) {
+                _verifyState.value = _verifyState.value.copy(
+                    sending = false,
+                    error = "Failed to resend code. Please try again.",
+                )
             }
         }
     }
 
+    /** Counts [cooldown] down from 30s so the resend link cannot be spammed. */
+    private fun startCooldown() {
+        viewModelScope.launch {
+            for (remaining in 30 downTo 1) {
+                _verifyState.value = _verifyState.value.copy(cooldown = remaining)
+                delay(1000)
+            }
+            _verifyState.value = _verifyState.value.copy(cooldown = 0)
+        }
+    }
+
+    /**
+     * Leaving the verify screen without entering the code discards the account, so the email stays
+     * free for another signup attempt. The account is only kept once the OTP has been accepted.
+     */
+    fun abandonUnverifiedSignup() {
+        viewModelScope.launch {
+            try {
+                if (!authRepository.isEmailVerified()) authRepository.deleteAccount()
+            } catch (_: Exception) {
+                // Deletion can fail (e.g. stale credentials); sign out anyway so the user isn't stuck.
+            }
+            logout()
+        }
+    }
+
+    /** Signs out and clears every auth-related UI state. */
     fun logout() {
         authRepository.signOut()
         _authState.value = AuthState.Unauthenticated

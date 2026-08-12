@@ -21,11 +21,12 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForwardIos
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.List
-import androidx.compose.material.icons.filled.Logout
+import androidx.compose.material.icons.automirrored.filled.List
+import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Send
+import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.filled.BugReport
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.HorizontalDivider
@@ -44,17 +45,32 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.platform.LocalContext
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavHostController
 import com.example.aquallera.components.LoadingIndicator
 import com.example.aquallera.core.theme.AppBg
 import com.example.aquallera.core.theme.MidnightBlue
 
+/** Profile tab: identity, verification badge, sign-out and links to edit/about. */
 @Composable
 fun ProfileScreen(
     navController: NavHostController? = null,
     viewModel: ProfileViewModel = hiltViewModel(),
 ) {
+    val context = LocalContext.current
+
+    /** Opens the mail client with a pre-filled bug report addressed to support. */
+    fun reportBug() {
+        val intent = android.content.Intent(android.content.Intent.ACTION_SENDTO).apply {
+            data = android.net.Uri.parse("mailto:aquallera.main@gmail.com")
+            putExtra(android.content.Intent.EXTRA_SUBJECT, "Bug Report - Aquallera")
+            putExtra(android.content.Intent.EXTRA_TEXT, "Please describe the issue you encountered in detail:\n\n")
+        }
+        context.startActivity(intent)
+    }
+
+    /** Switches bottom-nav tabs, restoring their previous back-stack state. */
     fun navigateToTab(route: String) {
         navController?.navigate(route) {
             popUpTo("map") { saveState = true }
@@ -138,7 +154,7 @@ fun ProfileScreen(
                         )
                         HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
                         ProfileActionRow(
-                            icon = Icons.Default.List,
+                            icon = Icons.AutoMirrored.Filled.List,
                             label = "My Orders",
                             onClick = { navigateToTab("orders") },
                         )
@@ -150,7 +166,13 @@ fun ProfileScreen(
                         )
                         HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
                         ProfileActionRow(
-                            icon = Icons.Default.Logout,
+                            icon = Icons.Default.BugReport,
+                            label = "Report Bug",
+                            onClick = { reportBug() },
+                        )
+                        HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                        ProfileActionRow(
+                            icon = Icons.AutoMirrored.Filled.Logout,
                             label = "Sign Out",
                             labelColor = Color.Red,
                             onClick = {
@@ -232,7 +254,7 @@ private fun VerificationBadge(
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 TextButton(onClick = onResend, enabled = !sending) {
                     Icon(
-                        imageVector = Icons.Default.Send,
+                        imageVector = Icons.AutoMirrored.Filled.Send,
                         contentDescription = null,
                         modifier = Modifier.size(16.dp),
                     )

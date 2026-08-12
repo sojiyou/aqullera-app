@@ -1,6 +1,5 @@
 package com.example.aquallera.components
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -12,14 +11,13 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.aquallera.core.theme.AppBg
 import com.example.aquallera.core.theme.MidnightBlue
 
+/** Primary full-width action button with an optional in-button loading spinner. */
 @Composable
 fun PrimaryButton(
     text: String,
@@ -63,20 +61,4 @@ fun PrimaryButton(
             }
         }
     }
-}
-
-@Composable
-fun LinkButton(
-    text: String,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    Text(
-        text = text,
-        color = Color.Gray.copy(alpha = 0.7f),
-        fontSize = 12.sp,
-        modifier = modifier.padding(8.dp),
-        fontWeight = FontWeight.Normal,
-    )
-    Box(modifier = Modifier.height(0.dp))
 }

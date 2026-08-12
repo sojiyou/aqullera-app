@@ -10,10 +10,10 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.DrawScope
-import com.example.aquallera.core.theme.Blue
 import com.example.aquallera.core.theme.LightYellow
 import com.example.aquallera.core.theme.MidnightBlue
 
+/** Branded navy backdrop with translucent gold and white waves, used on auth screens. */
 @Composable
 fun WaveBackground(modifier: Modifier = Modifier) {
     Box(

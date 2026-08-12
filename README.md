@@ -1,224 +1,196 @@
 # Aqua-llera — Android App
 
-Native Android app (Kotlin + XML) for Baguio City residents to locate nearby water refilling stations and order clean water for delivery or pickup. Pixel-replica conversion of the [Aqua-llera PWA](https://github.com/anomalyco/aquallera-pwa). Part of a capstone project.
+Native Android app for Baguio City residents to locate nearby water refilling stations and order
+clean water for delivery or pickup. Built with Jetpack Compose, using the
+[Aqua-llera PWA](https://github.com/anomalyco/aquallera-pwa) as the design reference.
+Part of a capstone project.
 
 | Component | Purpose |
 |---|---|
 | **Android App (this)** | Customer-facing native app |
-| **PWA** | Cross-platform customer-facing app (React) |
-| **Admin Website** | Dashboard for water station owners |
+| **Customer PWA** (`aquallera_pwa`) | Cross-platform customer-facing app (React) |
+| **Admin Dashboard** (`aquallera_web`) | Dashboard for water station owners |
 
-All three share the same Firebase project + Realtime Database.
+All three share the same Firebase project and Realtime Database.
 
 ---
 
 ## Tech Stack
 
-- **Kotlin** — language
-- **XML layouts** — no Compose
-- **Firebase Auth** — email/password authentication
-- **Firebase Realtime Database** — users, orders, water stations, order counter
-- **Mapbox Maps SDK v11** — interactive maps with station markers
-- **Google Play Services Location** — user location
-- **Material Components** — TextInputLayout (floating labels), MaterialCardView
-- **Coroutines** — async operations
-- **Nunito** — font (matching PWA)
-
----
-
-## Screens (14 Activities)
-
-| Screen | Activity | Key Features |
-|---|---|---|
-| Splash | `SplashActivity` | Logo + tagline + 1.5s delay + auth check |
-| Landing | `MainActivity` | Logo, Login/Signup buttons, tagline, footer |
-| Login | `LoginActivity` | Wave gradient bg, floating inputs, Firebase Auth |
-| Signup | `SignupActivity` | Wave gradient bg, floating inputs, duplicate checks |
-| Verify Email | `VerifyEmailActivity` | Resend/refresh, auto-redirect |
-| About | `AboutActivity` | Sections + BottomNav |
-| Maps | `MapActivity` | Full-screen MapView, draggable bottom sheet, custom markers |
-| Store Details | `StoreDetailsActivity` | Hours, services, prices grid, about, badges |
-| Create Order | `CreateOrderActivity` | Water type qty, Delivery/Pickup, Mapbox Geocoding, date/time |
-| Order Confirmation | `OrderConfirmationActivity` | Receipt card, fee breakdown, grand total |
-| Order Success | `OrderSuccessActivity` | Green checkmark, order details, action buttons |
-| Orders | `OrdersActivity` | Ticket list, 7 status colors, click to details |
-| Profile | `ProfileActivity` | Avatar, account card, email verification, action buttons |
-| Edit Profile | `EditProfileActivity` | Card inputs, save changes |
-
----
-
-## Firebase Data Model
-
-Same as the PWA. Root paths:
-
-| Path | Purpose |
+| Layer | Choice |
 |---|---|
-| `/users/{uid}` | User profiles: `{ uid, fullName, email, number, createdAt }` |
-| `/waterStations/{stationId}` | Station profiles with pricing, hours, status, `about` |
-| `/orders/{orderId}` | Orders with full line-item breakdown + fees |
-| `/orderCounter/{yyyyMMdd}` | Daily auto-incrementing counter |
+| Language | Kotlin 2.0.21 |
+| UI | Jetpack Compose + Material 3 (Compose BOM 2024.12.01) — no XML layouts |
+| Architecture | MVVM — single Activity, `ViewModel` + `StateFlow` |
+| Navigation | Navigation Compose (`NavGraph.kt`), one `NavHost` |
+| Dependency injection | Hilt 2.51.1 (with KSP) |
+| Async | Coroutines + Flow |
+| Maps | Mapbox Maps SDK v11.0.0 |
+| Location | Google Play Services Location 21.0.1 |
+| Backend | Firebase Auth + Realtime Database (BOM 32.7.0) |
+| Email | EmailJS REST API (verification codes only) |
+| Font | Nunito |
 
-Order ID format: `{stationPrefix}-{yyyyMMdd}-{counter}` (e.g. `AQU-20260427-0042`).
+`minSdk` 24 · `targetSdk` 34 · `compileSdk` 36 · applicationId `com.example.aquallera`
 
-Order includes `transactionFee` (2% of subtotal + delivery fee).
-
----
-
-## PWA → Android Comparison
-
-### Pages (14/14)
-
-| PWA Page | Android Activity | Status |
-|---|---|---|
-| `Splash.jsx` | `SplashActivity` | ✅ logo without text |
-| `Landing.jsx` | `MainActivity` | ✅ |
-| `Login.jsx` | `LoginActivity` | ✅ wave gradient + floating inputs |
-| `Signup.jsx` | `SignupActivity` | ✅ wave gradient + floating inputs |
-| `VerifyEmail.jsx` | `VerifyEmailActivity` | ✅ |
-| `About.jsx` | `AboutActivity` | ✅ |
-| `Maps.jsx` | `MapActivity` | ✅ pixel-match |
-| `StoreDetails.jsx` | `StoreDetailsActivity` | ✅ |
-| `CreateOrder.jsx` | `CreateOrderActivity` | ✅ pixel-match |
-| `OrderConfirmation.jsx` | `OrderConfirmationActivity` | ✅ pixel-match |
-| `OrderSuccess.jsx` | `OrderSuccessActivity` | ✅ |
-| `Orders.jsx` | `OrdersActivity` | ✅ pixel-match |
-| `Profile.jsx` | `ProfileActivity` | ✅ pixel-match |
-| `EditProfile.jsx` | `EditProfileActivity` | ✅ |
-
-### Components (7/7)
-
-| PWA Component | Android Layout | Status |
-|---|---|---|
-| `BottomNav.jsx` | `bottom_navigation.xml` | ✅ |
-| `Footer.jsx` | `footer.xml` | ✅ |
-| `FloatingInput.jsx` | `TextInputLayout` + `TextInputEditText` | ✅ |
-| `HowToOrderDialog.jsx` | `dialog_how_to_order.xml` | ✅ |
-| `OrderReceipt.jsx` | `receipt_layout.xml` | ✅ |
-| `OrderTicketItem.jsx` | `order_ticket_item.xml` | ✅ |
-| `WaterStationCard.jsx` | `item_water_station.xml` | ✅ |
-
-### Services & Utils (5/5)
-
-| PWA File | Android File | Status |
-|---|---|---|
-| `firebase.js` | `FirebaseConfig.kt` | ✅ |
-| `emailjs.js` | `EmailService.kt` | ✅ |
-| `haversine.js` | `WaterStation.kt` (inline) | ✅ |
-| `errors.js` | `ErrorUtils.kt` | ✅ |
-| `formatTime.js` | `TimeUtils.kt` | ✅ |
-
-### Assets & Design
-
-| PWA Asset | Android Equivalent | Status |
-|---|---|---|
-| Tailwind color palette | `res/values/colors.xml` | ✅ |
-| `logo.png` | `aqua_llera_logo.png` | ✅ |
-| `logo-no-name.png` | `aqua_llera_logo_no_name.png` | ✅ |
-| `ic_water_drop.svg` | `ic_water_drop.xml` | ✅ |
-| Nunito font | `res/font/nunito.ttf` | ✅ |
-| Wave SVG (Login/Signup) | `ic_wave.xml` + `login_bg.xml` | ✅ |
-| button/input backgrounds | 55+ XML drawables | ✅ |
+> **Note:** this app was originally written with XML layouts and 14 separate Activities. That version
+> was fully replaced by the Compose rewrite documented in `PLAN.md`. There are no XML layouts or
+> per-screen Activities left — only `MainActivity` hosting composable screens.
 
 ---
 
-## Conversion Phases
+## Screens (14)
 
-### Phase 1 — Foundation
-- Kotlin + XML project scaffolded, all dependencies configured (Firebase, Mapbox, Material Components, Coroutines)
-- Firebase Auth + Realtime Database integration (`FirebaseConfig.kt`)
-- Data models: `User.kt`, `WaterStation.kt`, `Order.kt` (with `transactionFee`)
-- Utility classes: `TimeUtils.kt`, `ErrorUtils.kt`, `Constants.kt`, `EmailService.kt`
-- Navigation: `AndroidManifest.xml` with all 14 activities
+All screens are composables under a single `MainActivity` + `NavHost`.
 
-### Phase 2a — Design System
-- **Colors** — `midnight_blue` (#191970), `blue` (#015084), `light_yellow` (#E5C95F), `app_bg` (#FFFCF2), status colors (Pending → Cancelled)
-- **Font** — Nunito via `res/font/nunito.ttf`
-- **Drawables (55+ XML)** — buttons (`btn_primary`, `btn_secondary`, `btn_logout_bg`), cards (`card_bg`, `rounded_corner_white`, `text_card_background`), input fields (`gray_input_field_bg`), status badges (`badge_bg`, `status_pending_bg`, `status_confirmed_bg`, etc.), status pills (`status_pill_*`), toggle buttons (`toggle_delivery_bg`, `toggle_pickup_bg`), backgrounds (`amber_warning_bg`, `green_verified_bg`, `green_circle_bg`, `circle_avatar_bg`), icons (`ic_water_drop`, `ic_my_location`, `ic_back_arrow`, `ic_clear`, `ic_location`, `ic_phone`, `ic_time`, `ic_service`), wave gradient (`ic_wave`, `login_bg`)
-- **Shared layouts** — `bottom_navigation.xml` (3-tab: Map/Orders/Profile), `footer.xml`, `dialog_how_to_order.xml`, `item_water_station.xml`, `order_ticket_item.xml`, `receipt_layout.xml`
-- **Introduced PWA wave gradient + floating label inputs** on Login/Signup screens
-
-### Phase 2b — Core Screen Redesigns
-
-| Screen | Changes |
-|---|---|
-| **MapActivity** | Full-screen MapView, HowToOrder header, user-location FAB, custom water-drop markers with zoom-scaled labels, draggable bottom sheet (15%/55%/85% snap), station flyTo, marker-to-sheet interaction |
-| **CreateOrderActivity** | Midnight-blue header, card-based form, Mapbox Geocoding autocomplete, Delivery/Pickup toggle buttons, +/- quantity controls, date picker, time slot buttons, preview overlay with fee breakdown + 2% transaction fee, email verification warning |
-| **OrderConfirmationActivity** | Midnight-blue header, receipt-style card (AQUA-LLERA title, order type badge, line-item columns, fee breakdown, grand total, customer details) |
-| **OrdersActivity** | Midnight-blue header, progress bar, empty state, scrollable order ticket rows with 7 colored status pills, items summary via `buildItemsSummary()`, click-to-navigate to OrderSuccess |
-| **ProfileActivity** | Avatar initial circle (80dp midnight-blue), Account Details card with justify-between layout, Email Verification card (green verified or amber warning w/ Resend + Refresh), 5 action buttons (Edit/Maps/Orders/About/Log Out red) |
-
-### Phase 3 — Remaining Screens & Polish
-
-| Screen | Changes |
-|---|---|
-| **EditProfileActivity** | Midnight-blue header with back button, 3 card-form inputs (Name/Email/Phone), Save Changes button (`btn_primary`); uses Firebase Auth `uid`; removed password fields |
-| **OrderSuccessActivity** | Green checkmark circle, "Order Placed!" heading, simplified Order Details card (Reference/Station/Type/Date/divider/Total), "You can track your order status" note, "Back to Maps" + "View My Orders" buttons; removed Cancel Order + real-time listener |
-| **StoreDetailsActivity** | Midnight-blue header + back, station name/address/status badge, Business Hours card (7 days, today bold), Offered Services chips, Delivery Hours chips (conditional), Price List 3-column grid (Pure/Spring/Mineral), About card (conditional), Return + Order Now buttons; `WaterStation.kt` updated with `about` field |
-| **VerifyEmailActivity** | Already matched PWA — no changes needed |
-| **Login & Signup** | Wave gradient background (`login_bg` layer-list), decorative wave SVG overlay (`ic_wave`), floating label inputs (`TextInputLayout` + `TextInputEditText`), back buttons, color-matched to PWA |
-
----
-
-## Design System
-
-- **Colors** — `midnight_blue` (#191970), `blue` (#015084), `light_yellow` (#E5C95F), `app_bg` (#FFFCF2)
-- **Font** — Nunito via `res/font/nunito.ttf`
-- **Drawables** — 55+ XML drawables: buttons, cards, badges, status pills, icons, wave background
-- **Status colors** — 7 distinct status pills (Pending → Cancelled)
+| Screen | Composable | Key features |
+|---|---|---|
+| Splash | `SplashScreen` | Logo, 1.5s delay, routes by auth + verification state |
+| Landing | `LandingScreen` | Logo, Log In / Sign Up, tagline, footer |
+| Login | `LoginScreen` | Wave gradient, floating inputs, Firebase Auth |
+| Signup | `SignupScreen` | Wave gradient, duplicate email/phone checks, sends verification code |
+| Verify Email | `VerifyEmailScreen` | 6-digit OTP entry, 30s resend cooldown, data privacy notice on success |
+| About | `AboutScreen` | App info + 6 data privacy sections |
+| Maps | `MapScreen` | Full-screen Mapbox, custom markers, draggable station panel, status filter |
+| Store Details | `StoreDetailsScreen` | Verified documents, business hours, services, delivery schedule, price list |
+| Create Order | `CreateOrderScreen` | Quantities, Delivery/Pickup, Mapbox address search, GPS, date/time |
+| Order Confirmation | `OrderConfirmationScreen` | Receipt with fee breakdown and grand total |
+| Order Success | `OrderSuccessScreen` | Confirmation, order details, next actions |
+| Orders | `OrdersScreen` | Order list, status filter, receipt view, cancel with confirmation |
+| Profile | `ProfileScreen` | Avatar, details, verification badge, action rows |
+| Edit Profile | `EditProfileScreen` | Name/email/phone, delete account |
 
 ---
 
 ## Project Structure
 
 ```
-app/src/main/
-├── java/com/example/aquallera/
-│   ├── SplashActivity.kt
-│   ├── MainActivity.kt
-│   ├── LoginActivity.kt
-│   ├── SignupActivity.kt
-│   ├── VerifyEmailActivity.kt
-│   ├── AboutActivity.kt
-│   ├── MapActivity.kt
-│   ├── StoreDetailsActivity.kt
-│   ├── CreateOrderActivity.kt
-│   ├── OrderConfirmationActivity.kt
-│   ├── OrderSuccessActivity.kt
-│   ├── OrdersActivity.kt
-│   ├── ProfileActivity.kt
-│   ├── EditProfileActivity.kt
-│   ├── FirebaseConfig.kt
-│   ├── EmailService.kt
-│   ├── ErrorUtils.kt
-│   ├── TimeUtils.kt
-│   ├── Constants.kt
-│   ├── User.kt
-│   ├── WaterStation.kt
-│   ├── Order.kt
-│   └── WaterStationAdapter.kt
-├── res/
-│   ├── drawable/          (55+ XML drawables + PNGs)
-│   ├── font/              (Nunito.ttf)
-│   ├── layout/            (13 XML layouts)
-│   └── values/
-│       ├── colors.xml
-│       ├── strings.xml
-│       └── themes.xml
-└── AndroidManifest.xml
+app/src/main/java/com/example/aquallera/
+├── AqualleraApp.kt                 # @HiltAndroidApp
+├── MainActivity.kt                 # Single Activity hosting the NavHost
+├── navigation/NavGraph.kt          # All routes + verification gating
+├── core/
+│   ├── di/                         # Hilt modules (Firebase, Database)
+│   ├── model/                      # User, WaterStation, Order
+│   ├── theme/                      # Colors, typography, shapes
+│   └── util/                       # Constants, TimeUtils, ErrorUtils, EmailService
+├── auth/         data/ + ui/       # AuthRepository, AuthViewModel, 5 auth screens
+├── stations/     data/             # StationRepository (real-time flows)
+├── maps/         ui/               # MapScreen + MapViewModel
+├── store/        ui/               # StoreDetailsScreen + StoreViewModel
+├── createorder/  data/ + ui/       # PendingOrderStore, order creation + confirmation
+├── orders/       data/             # OrderRepository (real-time flows, auto-cancel)
+├── ui/
+│   ├── about/                      # AboutScreen
+│   ├── orders/                     # OrdersScreen + OrdersViewModel
+│   └── profile/                    # Profile + EditProfile screens and ViewModels
+└── components/                     # Shared composables (see below)
 ```
+
+**Shared composables:** `BottomNavBar`, `WaterStationCard`, `OrderTicketItem`, `ReceiptCard`,
+`AqualleraInput`, `PrimaryButton`, `WaveBackground`, `Footer`, `LoadingIndicator`, `ErrorDialog`,
+`DataPrivacyDialog`, `GallonSwapNote`, `NotificationListener`.
+
+---
+
+## Firebase Data Model
+
+| Path | Purpose |
+|---|---|
+| `/users/{uid}` | Profiles: `{ uid, fullName, email, number, createdAt }` |
+| `/waterStations/{stationId}` | Station profiles: pricing, hours, services, `waterTypes`, `businessPermitDocuments`, status |
+| `/orders/{orderId}` | Orders with line items and fee breakdown |
+| `/orderCounter/{yyyyMMdd}` | Daily auto-incrementing counter for reference numbers |
+| `/emailVerification/{uid}` | `{ code, email, createdAt, verified }` for the OTP flow |
+
+**Reference number format:** `{stationPrefix}-{yyyyMMdd}-{counter}` — e.g. `AQU-20260813-0042`.
+Generated by an atomic `runTransaction` on `/orderCounter`, matching the PWA exactly.
+
+**Fees:** 2% transaction fee on (subtotal + delivery fee); delivery fee defaults to ₱50 when the
+station has not set one.
+
+Rules live in `database.rules.json`. `/emailVerification` is scoped per user
+(`auth.uid === $uid`) — it holds verification codes, so it must never be world-readable.
+
+---
+
+## Email Verification (6-digit OTP)
+
+Firebase's built-in email verification is **not** used. Signup writes a 6-digit code to
+`/emailVerification/{uid}` and emails it via EmailJS; the code expires after 10 minutes. Every
+protected route is gated on `/emailVerification/{uid}/verified`, the same flag the PWA reads, so a
+user verified in one client is verified in both.
+
+Leaving the verify screen without entering a code (either the "Back to Signup" link or the system
+back button) deletes the unverified account, so the email address stays available for another
+attempt.
+
+### EmailJS configuration gotcha
+
+The Android app is a **non-browser** client. In the EmailJS dashboard under
+**Account → Security**, both of these must be set or sending fails with HTTP 403 and no email
+arrives:
+
+1. **API access from non-browser applications** — enabled
+2. **Use Private Key** — disabled (otherwise requests must carry the private key)
+
+Credentials live in `core/util/Constants.kt`.
+
+> Order confirmation emails were removed — the app no longer emails customers about orders. Status
+> changes surface in-app via `NotificationListener` and the Orders tab.
 
 ---
 
 ## Setup
 
-1. Open in Android Studio
-2. Place `debug.keystore` at `%USERPROFILE%/AppData/Local/Temp/`
+1. Open the project in Android Studio.
+2. Ensure `google-services.json` is present in `app/`.
+3. Confirm the Mapbox token in `core/util/Constants.kt` and
+   `app/src/main/res/values/strings.xml` (`mapbox_access_token`).
+4. A debug keystore is read from `~/.android/debug.keystore` and is created automatically by
+   Android Studio. See the caveat below if you hit a signing error.
+5. Build and run on a device or emulator (API 24+).
 
-## Recent Changes
+### Build commands
 
-| Date | Commit | Changes |
-|------|--------|---------|
-| Jul 11 | `1685fac` | **Update footer email** — Changed footer contact email from `aquallera@gmail.com` to `aquallera.main@gmail.com` |
-3. Ensure `google-services.json` is in `app/` (Firebase)
-4. Add Mapbox token to `res/values/strings.xml`
-5. Build & run on device/emulator (API 24+)
+Run from the project root.
+
+| Action | Command |
+|---|---|
+| Build debug APK | `gradlew.bat assembleDebug` |
+| Build + install on a running device | `gradlew.bat installDebug` |
+| Clean rebuild | `gradlew.bat clean assembleDebug` |
+| Avoid Gradle lock errors | add `--no-daemon` |
+
+First build takes ~2–3 minutes; later builds are 30–60s.
+
+### Signing caveat
+
+The debug signing config previously pointed at `%TEMP%`, which Windows periodically wipes — losing
+the keystore makes every existing install impossible to update (`INSTALL_FAILED_UPDATE_INCOMPATIBLE`),
+requiring an uninstall. It now uses the standard `~/.android/debug.keystore`. Do not move it back.
+
+The `release` build type has no signing config, so `assembleRelease` produces an **unsigned APK that
+cannot be installed**. Add a release signing config before distributing a release build.
+
+---
+
+## Known Limitations
+
+1. **GPS unverified on real hardware.** The location fix logic (`getUserLocation` in `MapScreen.kt`)
+   is verified against a simulated position only. Emulators have no GPS and report whatever is set
+   under Extended Controls → Location, so they can never show a real position. See `PLAN.md`.
+2. **Coarse fixes are shown without warning.** Accuracy filters were removed because they discarded
+   fixes silently; a low-accuracy fix now renders as a confident marker.
+3. **Payment is Cash on Delivery only.** `paymentMethod` exists on every order but is not selectable.
+4. **API keys are compiled into the APK** (`Constants.kt`), so they are recoverable by anyone who
+   unpacks it.
+5. **PWA orders can carry mismatched field types** (e.g. `createdAt` as an ISO string). `OrderRepository`
+   parses each child in its own try/catch and skips unreadable orders rather than crashing.
+
+---
+
+## Documentation
+
+- **`PLAN.md`** — rewrite plan, phase-by-phase history, per-session change logs, and resolved issues.
+- **`database.rules.json`** — Realtime Database security rules.

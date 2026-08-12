@@ -5,7 +5,6 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.aquallera.core.model.WaterStation
 import com.example.aquallera.core.util.Constants
-import com.example.aquallera.core.util.TimeUtils
 import com.example.aquallera.createorder.data.PendingOrderData
 import com.example.aquallera.createorder.data.PendingOrderStore
 import com.example.aquallera.stations.data.StationRepository
@@ -56,12 +55,12 @@ data class CreateOrderUiState(
     val selectedLng: Double? = null,
     val showPreview: Boolean = false,
 ) {
-    val hasPureWater: Boolean get() = station?.pricing_gallon_pure != null && station!!.pricing_gallon_pure > 0
-    val hasSpringWater: Boolean get() = station?.pricing_gallon_spring != null && station!!.pricing_gallon_spring > 0
-    val hasMineralWater: Boolean get() = station?.pricing_gallon_mineral != null && station!!.pricing_gallon_mineral > 0
+    val hasPureWater: Boolean get() = station?.pricing_gallon_pure != null && station!!.pricing_gallon_pure > 0 && station!!.offers("pure")
+    val hasSpringWater: Boolean get() = (station?.springPrice ?: 0.0) > 0 && station!!.offers("spring")
+    val hasMineralWater: Boolean get() = station?.pricing_gallon_mineral != null && station!!.pricing_gallon_mineral > 0 && station!!.offers("mineral")
 
     val pureWaterPrice: Double get() = station?.pricing_gallon_pure ?: 0.0
-    val springWaterPrice: Double get() = station?.pricing_gallon_spring ?: 0.0
+    val springWaterPrice: Double get() = station?.springPrice ?: 0.0
     val mineralWaterPrice: Double get() = station?.pricing_gallon_mineral ?: 0.0
 
     val pureWaterTotal: Double get() = pureWaterQty * pureWaterPrice
@@ -140,6 +139,10 @@ data class CreateOrderUiState(
         }
 }
 
+/**
+ * Backs the Create Order form: water quantities, Mapbox address autocomplete, delivery
+ * scheduling and the live price totals.
+ */
 @HiltViewModel
 class CreateOrderViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
@@ -158,6 +161,7 @@ class CreateOrderViewModel @Inject constructor(
         loadStation()
     }
 
+    /** One-shot fetch of the station, which also picks the default order type and date. */
     private fun loadStation() {
         if (stationId.isBlank()) {
             _uiState.update { it.copy(error = "Invalid station", loading = false) }
@@ -190,24 +194,31 @@ class CreateOrderViewModel @Inject constructor(
         }
     }
 
+    /** Updates the pure-water quantity, never below zero. */
     fun onPureWaterQtyChanged(qty: Int) { _uiState.update { it.copy(pureWaterQty = maxOf(0, qty)) } }
+    /** Updates the spring-water quantity, never below zero. */
     fun onSpringWaterQtyChanged(qty: Int) { _uiState.update { it.copy(springWaterQty = maxOf(0, qty)) } }
+    /** Updates the mineral-water quantity, never below zero. */
     fun onMineralWaterQtyChanged(qty: Int) { _uiState.update { it.copy(mineralWaterQty = maxOf(0, qty)) } }
-    fun onLocationDetailsChanged(v: String) { _uiState.update { it.copy(locationDetails = v) } }
+    /** Updates the delivery notes field. */
     fun onAdditionalDetailsChanged(v: String) { _uiState.update { it.copy(additionalDetails = v) } }
 
+    /** Switches Delivery/Pickup, which also toggles the delivery fee in the totals. */
     fun onOrderTypeChanged(type: String) {
         _uiState.update { it.copy(orderType = type) }
     }
 
+    /** Sets the requested delivery date. */
     fun onPreferredDateChanged(date: String) {
         _uiState.update { it.copy(preferredDate = date) }
     }
 
+    /** Sets the requested pickup time. */
     fun onPreferredTimeChanged(time: String) {
         _uiState.update { it.copy(preferredTime = time) }
     }
 
+    /** Fires a debounced Mapbox autocomplete search on every keystroke. */
     fun onAddressSearchChanged(query: String) {
         _uiState.update { it.copy(addressSearch = query, deliveryAddress = query, selectedLat = null, selectedLng = null) }
         searchJob?.cancel()
@@ -217,6 +228,7 @@ class CreateOrderViewModel @Inject constructor(
         }
     }
 
+    /** Picks an autocomplete result as the delivery address. */
     fun selectSuggestion(suggestion: MapboxSuggestion) {
         _uiState.update {
             it.copy(
@@ -229,24 +241,14 @@ class CreateOrderViewModel @Inject constructor(
         }
     }
 
+    /** Clears the address fields and any pending autocomplete results. */
     fun clearAddress() {
         _uiState.update {
             it.copy(addressSearch = "", deliveryAddress = "", selectedLat = null, selectedLng = null, suggestions = emptyList())
         }
     }
 
-    fun handleGetLocation(onPermissionRequest: () -> Unit) {
-        viewModelScope.launch {
-            _uiState.update { it.copy(isSearchingAddress = true) }
-            try {
-                val freshSuggestions = emptyList<MapboxSuggestion>()
-                _uiState.update { it.copy(suggestions = freshSuggestions) }
-            } finally {
-                _uiState.update { it.copy(isSearchingAddress = false) }
-            }
-        }
-    }
-
+    /** Reverse-geocodes a device-location pick into an address. */
     fun onLocationResult(lat: Double, lng: Double) {
         viewModelScope.launch {
             _uiState.update { it.copy(isSearchingAddress = true) }
@@ -264,12 +266,15 @@ class CreateOrderViewModel @Inject constructor(
         }
     }
 
+    /** Toggles the order summary preview. */
     fun setShowPreview(show: Boolean) {
         _uiState.update { it.copy(showPreview = show) }
     }
 
+    /** Reloads the station after a failure — the Retry button calls this. */
     fun retry() { loadStation() }
 
+    /** Validates a non-empty order and hands it to the pending store; false when empty. */
     fun proceedToConfirmation(): Boolean {
         val s = _uiState.value
         if (!s.hasAnyItem) return false
@@ -301,6 +306,7 @@ class CreateOrderViewModel @Inject constructor(
         return true
     }
 
+    /** Queries Mapbox Places and surfaces up to 8 suggestions in the UI state. */
     private suspend fun searchAddress(query: String) {
         withContext(Dispatchers.IO) {
             try {
@@ -332,6 +338,7 @@ class CreateOrderViewModel @Inject constructor(
         }
     }
 
+    /** Resolves a coordinate to a place name, falling back to its raw lat/lng. */
     private suspend fun reverseGeocode(lat: Double, lng: Double): String = withContext(Dispatchers.IO) {
         try {
             val url = URL("https://api.mapbox.com/geocoding/v5/mapbox.places/$lng,$lat.json?access_token=${Constants.MAPBOX_TOKEN}&limit=1")

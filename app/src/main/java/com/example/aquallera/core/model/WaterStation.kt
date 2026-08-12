@@ -3,13 +3,12 @@ package com.example.aquallera.core.model
 import com.google.firebase.database.PropertyName
 import kotlin.math.*
 
+/** A water station record from `/waterStations`; keys use the admin site's exact field names. */
 data class WaterStation(
 
     val id: String = "",
 
-    @get:PropertyName("isOnline")
-    @set:PropertyName("isOnline")
-    var online: Boolean = false,
+    @PropertyName("online") var isOnline: Boolean = false,
 
     @PropertyName("status") val status: String = "pending",
     @PropertyName("stationName") val stationName: String = "",
@@ -35,13 +34,38 @@ data class WaterStation(
     @PropertyName("businessHours") val businessHours: Map<String, String> = emptyMap(),
     @PropertyName("serviceTypes") val serviceTypes: List<String> = emptyList(),
     @PropertyName("deliveryDays") val deliveryDays: List<String>? = null,
+    /** Water types the station actually offers ("pure"/"spring"/"mineral"); empty means all three. */
+    @PropertyName("waterTypes") val waterTypes: List<String>? = null,
+    @PropertyName("businessPermitDocuments") val businessPermitDocuments: Map<String, Any>? = null,
     @PropertyName("about") val about: String = "",
     @PropertyName("revokedAt") val revokedAt: Long? = null,
     @PropertyName("createdAt") val createdAt: String = "",
     @PropertyName("updatedAt") val updatedAt: String = "",
 ) {
-    val isOnline: Boolean get() = online
+    /** Mirrors the PWA: an absent or empty waterTypes list means the station offers all three. */
+    fun offers(type: String): Boolean =
+        waterTypes.isNullOrEmpty() || waterTypes.any { it.equals(type, ignoreCase = true) }
 
+    /**
+     * Spring water price, preferring the per-litre field the admin site writes and falling back to
+     * the per-gallon one.
+     *
+     * Kept here rather than at each call site: the store page, the station card and the order form
+     * previously derived this separately, and the order form checked only the per-gallon field —
+     * so a station priced per litre appeared to sell spring water but could not be ordered it.
+     */
+    val springPrice: Double?
+        get() = pricing_liter_spring ?: pricing_gallon_spring
+
+    /** Keys of uploaded permit documents (those with a filename or base64 payload). */
+    val verifiedDocumentKeys: List<String>
+        get() = businessPermitDocuments.orEmpty()
+            .filterValues { doc ->
+                (doc as? Map<*, *>)?.let { it["filename"] != null || it["base64"] != null } == true
+            }
+            .keys.toList()
+
+    /** Straight-line distance to the user, using Android's location API with a fallback. */
     fun calculateDistanceTo(userLat: Double, userLon: Double): DistanceResult {
         if (latitude == 0.0 && longitude == 0.0) {
             return DistanceResult(meters = -1f, formatted = "Unknown", accuracyScore = 0.0)
@@ -70,13 +94,6 @@ data class WaterStation(
         return r * 2 * atan2(sqrt(a), sqrt(1 - a))
     }
 
-    fun isWithinDeliveryRange(userLat: Double, userLon: Double): Boolean {
-        val distance = calculateDistanceTo(userLat, userLon).meters
-        return distance <= deliveryRadius * 1000
-    }
-
-    fun hasDeliveryService(): Boolean = serviceTypes.contains("delivery")
-
     private fun formatDistance(meters: Double): String = when {
         meters < 0 -> "Unknown"
         meters < 1000 -> "${meters.roundToInt()} m"
@@ -94,6 +111,7 @@ data class WaterStation(
     private fun Double.roundToInt(): Int = round(this).toInt()
 }
 
+/** Distance to a station in meters, a human-readable label, and a trust score for the lat/lng. */
 data class DistanceResult(
     val meters: Float,
     val formatted: String,

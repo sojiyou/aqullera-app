@@ -35,6 +35,7 @@ import com.example.aquallera.core.theme.Gray600
 import com.example.aquallera.core.theme.InputBg
 import com.example.aquallera.core.theme.MidnightBlue
 
+/** Floating-label text field with optional password visibility toggle and error text. */
 @Composable
 fun AqualleraInput(
     label: String,

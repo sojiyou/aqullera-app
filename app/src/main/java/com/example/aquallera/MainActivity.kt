@@ -10,6 +10,7 @@ import com.example.aquallera.core.theme.AqualleraTheme
 import com.example.aquallera.navigation.AqualleraNavGraph
 import dagger.hilt.android.AndroidEntryPoint
 
+/** Single-activity host that mounts the theme, order listener and navigation graph. */
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {

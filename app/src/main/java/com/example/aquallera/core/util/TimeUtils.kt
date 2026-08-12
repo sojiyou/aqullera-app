@@ -1,32 +1,15 @@
 package com.example.aquallera.core.util
 
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
-
+/** Time formatting shared by the store, order and map screens. */
 object TimeUtils {
-    private val dateTimeFormat = SimpleDateFormat("MMM dd, yyyy h:mm a", Locale.US)
-    private val dateFormat = SimpleDateFormat("MMM dd, yyyy", Locale.US)
-    private val timeFormat = SimpleDateFormat("h:mm a", Locale.US)
 
-    fun formatDateTime(timestamp: Long): String = dateTimeFormat.format(Date(timestamp))
-
-    fun formatDate(timestamp: Long): String = dateFormat.format(Date(timestamp))
-
-    fun formatTime(timestamp: Long): String = timeFormat.format(Date(timestamp))
-
-    fun formatRelative(timestamp: Long): String {
-        val now = System.currentTimeMillis()
-        val diff = now - timestamp
-        return when {
-            diff < 60_000 -> "Just now"
-            diff < 3_600_000 -> "${diff / 60_000}m ago"
-            diff < 86_400_000 -> "${diff / 3_600_000}h ago"
-            diff < 604_800_000 -> "${diff / 86_400_000}d ago"
-            else -> formatDate(timestamp)
-        }
-    }
-
+    /**
+     * Rewrites any 24-hour `HH:mm` occurrences in [timeStr] to 12-hour form with AM/PM,
+     * leaving times that already carry AM/PM untouched.
+     *
+     * Works on whole strings rather than a single time, so ranges convert in one call:
+     * `"09:00 - 17:30"` becomes `"9:00 AM - 5:30 PM"`. Matches the PWA's `to12Hour`.
+     */
     fun to12Hour(timeStr: String): String {
         val regex = Regex("""\b(\d{1,2}):(\d{2})\b(?!\s*(?:AM|PM))""", RegexOption.IGNORE_CASE)
         return regex.replace(timeStr) { match ->

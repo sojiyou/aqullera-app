@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -39,6 +38,7 @@ import com.example.aquallera.core.theme.AppBg
 import com.example.aquallera.core.theme.LightYellow
 import com.example.aquallera.core.theme.MidnightBlue
 
+/** Login form; forwards navigation callbacks to the caller once sign-in resolves. */
 @Composable
 fun LoginScreen(
     viewModel: AuthViewModel,
@@ -62,7 +62,7 @@ fun LoginScreen(
             Image(
                 painter = painterResource(id = R.drawable.logo_no_name),
                 contentDescription = "Aquallera Logo",
-                modifier = Modifier.size(200.dp),
+                modifier = Modifier.size(180.dp),
             )
 
             Spacer(modifier = Modifier.height(8.dp))
@@ -103,7 +103,7 @@ fun LoginScreen(
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(12.dp))
                     .background(AppBg)
-                    .padding(32.dp),
+                    .padding(horizontal = 32.dp, vertical = 36.dp),
             ) {
                 Column {
                     if (state.error != null) {
@@ -161,7 +161,7 @@ fun LoginScreen(
                             text = "Log In",
                             onClick = { viewModel.login() },
                             loading = state.loading,
-                            buttonWidth = 120,
+                            buttonWidth = 140,
                         )
                     }
                 }

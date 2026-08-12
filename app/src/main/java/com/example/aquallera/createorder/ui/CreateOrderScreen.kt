@@ -46,6 +46,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.example.aquallera.components.GallonSwapNote
 import com.example.aquallera.components.LoadingIndicator
 import com.example.aquallera.components.PrimaryButton
 import com.example.aquallera.core.theme.AppBg
@@ -56,6 +57,7 @@ import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.util.Calendar
 
+/** Create Order form: quantities, address autocomplete, schedule, and the summary preview. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CreateOrderScreen(
@@ -114,6 +116,7 @@ fun CreateOrderScreen(
                         availableTypes = state.availableOrderTypes,
                         selectedType = state.orderType,
                         onTypeChanged = { viewModel.onOrderTypeChanged(it) },
+                        showGallonSwapNote = state.orderType == "Delivery",
                     )
 
                     QuantitiesCard(state, viewModel)
@@ -176,6 +179,7 @@ private fun OrderTypeCard(
     availableTypes: List<String>,
     selectedType: String,
     onTypeChanged: (String) -> Unit,
+    showGallonSwapNote: Boolean = false,
 ) {
     Card(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
@@ -209,6 +213,10 @@ private fun OrderTypeCard(
                         )
                     }
                 }
+            }
+            if (showGallonSwapNote) {
+                Spacer(modifier = Modifier.height(8.dp))
+                GallonSwapNote()
             }
         }
     }
@@ -321,9 +329,13 @@ private fun DeliveryAddressCard(state: CreateOrderUiState, viewModel: CreateOrde
                         .clip(RoundedCornerShape(8.dp))
                         .background(MidnightBlue)
                         .clickable {
-                            com.example.aquallera.maps.ui.getUserLocation(context) { lat, lng ->
-                                viewModel.onLocationResult(lat, lng)
-                            }
+                            com.example.aquallera.maps.ui.getUserLocation(
+                                context = context,
+                                onResult = { lat, lng -> viewModel.onLocationResult(lat, lng) },
+                                onError = { msg ->
+                                    android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_LONG).show()
+                                },
+                            )
                         }
                         .padding(horizontal = 14.dp),
                     contentAlignment = Alignment.Center,

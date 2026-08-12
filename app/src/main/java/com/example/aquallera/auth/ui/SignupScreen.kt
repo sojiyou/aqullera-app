@@ -18,6 +18,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -38,6 +39,7 @@ import com.example.aquallera.core.theme.AppBg
 import com.example.aquallera.core.theme.LightYellow
 import com.example.aquallera.core.theme.MidnightBlue
 
+/** Signup form; routes to email verification once an account is created. */
 @Composable
 fun SignupScreen(
     viewModel: AuthViewModel,
@@ -48,9 +50,10 @@ fun SignupScreen(
 ) {
     val state by viewModel.signupState.collectAsState()
 
-    if (signupSuccess) {
-        onNavigateToVerifyEmail()
-        return
+    // Must be a side effect, not a composition-time call: navigating inline re-fired on every
+    // recomposition, so returning here from the verify screen bounced straight back to it.
+    LaunchedEffect(signupSuccess) {
+        if (signupSuccess) onNavigateToVerifyEmail()
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
@@ -68,7 +71,7 @@ fun SignupScreen(
             Image(
                 painter = painterResource(id = R.drawable.logo_no_name),
                 contentDescription = "Aquallera Logo",
-                modifier = Modifier.size(150.dp),
+                modifier = Modifier.size(135.dp),
             )
 
             Spacer(modifier = Modifier.height(24.dp))
@@ -109,7 +112,7 @@ fun SignupScreen(
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(12.dp))
                     .background(AppBg)
-                    .padding(32.dp),
+                    .padding(horizontal = 32.dp, vertical = 36.dp),
             ) {
                 Column {
                     if (state.error != null) {
@@ -191,7 +194,7 @@ fun SignupScreen(
                             text = "Sign Up",
                             onClick = { viewModel.signup() },
                             loading = state.loading,
-                            buttonWidth = 120,
+                            buttonWidth = 140,
                         )
                     }
                 }

@@ -4,7 +4,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -31,11 +30,13 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavHostController
 import com.example.aquallera.R
+import com.example.aquallera.components.DATA_PRIVACY_SECTIONS
 import com.example.aquallera.core.theme.AppBg
 import com.example.aquallera.core.theme.Blue
 import com.example.aquallera.core.theme.MidnightBlue
 import com.example.aquallera.core.theme.TextCard
 
+/** About page: app info, privacy sections and contact footer. */
 @Composable
 fun AboutScreen(navController: NavHostController? = null) {
     Column(
@@ -79,10 +80,9 @@ fun AboutScreen(navController: NavHostController? = null) {
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        SectionHeading("Why make Aquallera?", alignEnd = true)
+        SectionHeading("Why make Aquallera?")
         InfoCard(
-            "We created Aqua-llera to help Baguio City residents get clean water more easily and reliably. It also helps centralize information about water stations, so you can find what you need without all the usual hassle.",
-            alignEnd = true,
+            "We created Aqua-llera to help Baguio City residents get clean water more easily and reliably. It also helps centralize information about water stations, so you can find what you need without all the usual hassle."
         )
 
         Spacer(modifier = Modifier.height(16.dp))
@@ -92,7 +92,15 @@ fun AboutScreen(navController: NavHostController? = null) {
             "Getting started is super easy! Just open the app and allow location access to see nearby water stations. Pick your preferred water type and how much you need, then choose between delivery or pickup. Review your order, hit confirm, and you\u2019re all set \u2014 your clean water will be on its way!"
         )
 
-        Spacer(modifier = Modifier.height(20.dp))
+        Spacer(modifier = Modifier.height(16.dp))
+
+        SectionHeading("Data Privacy")
+        DATA_PRIVACY_SECTIONS.forEach { (heading, body) ->
+            InfoCard(text = body, heading = heading)
+            Spacer(modifier = Modifier.height(12.dp))
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
 
         Row(
             modifier = Modifier
@@ -119,33 +127,42 @@ fun AboutScreen(navController: NavHostController? = null) {
 }
 
 @Composable
-private fun SectionHeading(text: String, alignEnd: Boolean = false) {
+private fun SectionHeading(text: String) {
     Text(
         text = text,
         fontSize = 20.sp,
         fontWeight = FontWeight.Bold,
         color = MidnightBlue,
         modifier = Modifier.fillMaxWidth(),
-        textAlign = if (alignEnd) TextAlign.End else TextAlign.Start,
+        textAlign = TextAlign.Start,
     )
     Spacer(modifier = Modifier.height(12.dp))
 }
 
 @Composable
-private fun InfoCard(text: String, alignEnd: Boolean = false) {
+private fun InfoCard(text: String, heading: String? = null) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(12.dp),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
         colors = CardDefaults.cardColors(containerColor = TextCard),
     ) {
-        Box(modifier = Modifier.padding(16.dp)) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            if (heading != null) {
+                Text(
+                    text = heading,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MidnightBlue,
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+            }
             Text(
                 text = text,
                 fontSize = 14.sp,
                 color = MidnightBlue,
                 lineHeight = 22.sp,
-                textAlign = if (alignEnd) TextAlign.End else TextAlign.Start,
+                textAlign = TextAlign.Start,
             )
         }
     }

@@ -28,6 +28,7 @@ import com.example.aquallera.core.theme.AppBg
 import com.example.aquallera.core.theme.MidnightBlue
 import com.example.aquallera.core.theme.StatusCompleted
 
+/** Post-order confirmation with the receipt summary and next-step buttons. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun OrderSuccessScreen(

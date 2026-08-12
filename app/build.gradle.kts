@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -6,6 +8,14 @@ plugins {
     alias(libs.plugins.hilt)
     alias(libs.plugins.ksp)
 }
+
+// Release signing details are kept in keystore.properties (gitignored) so the password never
+// lands in version control. Without that file the project still builds debug normally.
+val keystorePropsFile = rootProject.file("keystore.properties")
+val keystoreProps = Properties().apply {
+    if (keystorePropsFile.exists()) keystorePropsFile.inputStream().use { load(it) }
+}
+val hasReleaseSigning = keystorePropsFile.exists()
 
 android {
     namespace = "com.example.aquallera"
@@ -23,10 +33,20 @@ android {
 
     signingConfigs {
         getByName("debug") {
-            storeFile = file("${System.getProperty("user.home")}/AppData/Local/Temp/debug.keystore")
+            // Standard Android location — %TEMP% gets wiped, which loses the keystore
+            // and makes every existing install un-updatable.
+            storeFile = file("${System.getProperty("user.home")}/.android/debug.keystore")
             storePassword = "android"
             keyAlias = "androiddebugkey"
             keyPassword = "android"
+        }
+        if (hasReleaseSigning) {
+            create("release") {
+                storeFile = file(keystoreProps.getProperty("storeFile"))
+                storePassword = keystoreProps.getProperty("storePassword")
+                keyAlias = keystoreProps.getProperty("keyAlias")
+                keyPassword = keystoreProps.getProperty("keyPassword")
+            }
         }
     }
 
@@ -37,6 +57,10 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            // Without this, assembleRelease emits an unsigned APK that cannot be installed.
+            if (hasReleaseSigning) {
+                signingConfig = signingConfigs.getByName("release")
+            }
         }
         debug {
             signingConfig = signingConfigs.getByName("debug")

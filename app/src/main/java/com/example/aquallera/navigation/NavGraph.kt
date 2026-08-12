@@ -1,16 +1,12 @@
 package com.example.aquallera.navigation
 
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavHostController
@@ -27,7 +23,6 @@ import com.example.aquallera.auth.ui.LoginScreen
 import com.example.aquallera.auth.ui.SignupScreen
 import com.example.aquallera.auth.ui.SplashScreen
 import com.example.aquallera.auth.ui.VerifyEmailScreen
-import com.example.aquallera.core.theme.MidnightBlue
 import com.example.aquallera.createorder.ui.CreateOrderScreen
 import com.example.aquallera.createorder.ui.OrderConfirmationScreen
 import com.example.aquallera.createorder.ui.OrderSuccessScreen
@@ -38,6 +33,7 @@ import com.example.aquallera.ui.orders.OrdersScreen
 import com.example.aquallera.ui.profile.EditProfileScreen
 import com.example.aquallera.ui.profile.ProfileScreen
 
+/** Central route registry so destinations are referenced from one place. */
 object Routes {
     const val SPLASH = "splash"
     const val LANDING = "landing"
@@ -54,11 +50,15 @@ object Routes {
     const val EDIT_PROFILE = "edit_profile"
     const val ABOUT = "about"
 
+    /** Builds the concrete route for a station's details screen. */
     fun storeDetails(stationId: String) = "store/$stationId"
+    /** Builds the concrete route for a station's create-order screen. */
     fun createOrder(stationId: String) = "create_order/$stationId"
+    /** Builds the concrete route for an order's success screen. */
     fun orderSuccess(orderId: String) = "order_success/$orderId"
 }
 
+/** Root navigation host wiring every screen to its route, guarded by auth state. */
 @Composable
 fun AqualleraNavGraph(
     navController: NavHostController,
@@ -66,12 +66,14 @@ fun AqualleraNavGraph(
 ) {
     val authState by authViewModel.authState.collectAsState()
     val verifyState by authViewModel.verifyState.collectAsState()
+    val emailVerified by authViewModel.emailVerified.collectAsState()
 
     NavHost(navController = navController, startDestination = Routes.SPLASH) {
         composable(Routes.SPLASH) {
             val isLoggedIn = authState is AuthState.Authenticated
             SplashScreen(
                 isLoggedIn = isLoggedIn,
+                isEmailVerified = emailVerified,
                 onNavigateToLanding = {
                     navController.navigate(Routes.LANDING) {
                         popUpTo(Routes.SPLASH) { inclusive = true }
@@ -79,6 +81,11 @@ fun AqualleraNavGraph(
                 },
                 onNavigateToMap = {
                     navController.navigate(Routes.MAP) {
+                        popUpTo(Routes.SPLASH) { inclusive = true }
+                    }
+                },
+                onNavigateToVerifyEmail = {
+                    navController.navigate(Routes.VERIFY_EMAIL) {
                         popUpTo(Routes.SPLASH) { inclusive = true }
                     }
                 },
@@ -98,10 +105,17 @@ fun AqualleraNavGraph(
                 onNavigateToSignup = { navController.navigate(Routes.SIGNUP) },
                 onNavigateBack = { navController.popBackStack() },
             )
-            LaunchedEffect(authState) {
-                if (authState is AuthState.Authenticated) {
-                    navController.navigate(Routes.MAP) {
-                        popUpTo(Routes.SPLASH) { inclusive = true }
+            LaunchedEffect(authState, emailVerified) {
+                if (authState is AuthState.Authenticated && emailVerified != null) {
+                    if (emailVerified == true) {
+                        navController.navigate(Routes.MAP) {
+                            popUpTo(Routes.SPLASH) { inclusive = true }
+                        }
+                    } else {
+                        // Replace Login, so back from the verify screen can't return here.
+                        navController.navigate(Routes.VERIFY_EMAIL) {
+                            popUpTo(Routes.LOGIN) { inclusive = true }
+                        }
                     }
                 }
             }
@@ -112,8 +126,11 @@ fun AqualleraNavGraph(
                 viewModel = authViewModel,
                 onNavigateToLogin = { navController.navigate(Routes.LOGIN) },
                 onNavigateToVerifyEmail = {
+                    // Replace Signup. popUpTo(SPLASH) never matched here — Splash was already
+                    // popped on the way to Landing — so the stack kept growing and back
+                    // navigation bounced between Signup and this screen.
                     navController.navigate(Routes.VERIFY_EMAIL) {
-                        popUpTo(Routes.SPLASH) { inclusive = true }
+                        popUpTo(Routes.SIGNUP) { inclusive = true }
                     }
                 },
                 onNavigateBack = { navController.popBackStack() },
@@ -129,9 +146,13 @@ fun AqualleraNavGraph(
                         popUpTo(Routes.SPLASH) { inclusive = true }
                     }
                 },
-                onBackToLogin = {
-                    navController.navigate(Routes.LOGIN) {
-                        popUpTo(Routes.SPLASH) { inclusive = true }
+                onBackToSignup = {
+                    // Pop this screen itself — the only anchor guaranteed to match regardless of
+                    // whether we arrived from Signup, Login or Splash. launchSingleTop then
+                    // reuses the Signup entry underneath instead of stacking a duplicate.
+                    navController.navigate(Routes.SIGNUP) {
+                        popUpTo(Routes.VERIFY_EMAIL) { inclusive = true }
+                        launchSingleTop = true
                     }
                 },
             )
@@ -212,6 +233,17 @@ fun AqualleraNavGraph(
             EditProfileScreen(
                 onBack = { navController.popBackStack() },
                 onSaved = { navController.popBackStack() },
+                onGoToOrders = {
+                    navController.navigate(Routes.ORDERS) {
+                        popUpTo(Routes.MAP) { saveState = true }
+                        launchSingleTop = true
+                    }
+                },
+                onAccountDeleted = {
+                    navController.navigate(Routes.LANDING) {
+                        popUpTo(0) { inclusive = true }
+                    }
+                },
             )
         }
         composable(Routes.ABOUT) {
@@ -247,16 +279,5 @@ private fun MainScreen(
         Box(modifier = Modifier.padding(padding)) {
             content()
         }
-    }
-}
-
-@Composable
-fun PlaceholderContent(name: String) {
-    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Text(
-            text = name,
-            style = MaterialTheme.typography.headlineMedium,
-            color = MidnightBlue,
-        )
     }
 }

@@ -1,5 +1,6 @@
 package com.example.aquallera.core.util
 
+/** Shared fee, order-status, map and third-party constants. */
 object Constants {
     const val TRANSACTION_FEE_RATE = 0.02
     const val DEFAULT_DELIVERY_FEE = 50.0
@@ -19,10 +20,12 @@ object Constants {
     val BAGUIO_BOUNDS_SOUTH_WEST = doubleArrayOf(120.5200, 16.3600)
     val BAGUIO_BOUNDS_NORTH_EAST = doubleArrayOf(120.6700, 16.4600)
 
-    const val EMAILJS_SERVICE_ID = "service_6q0e89w"
-    const val EMAILJS_TEMPLATE_ID = "template_2rk5qyq"
-    const val EMAILJS_PUBLIC_KEY = "fpu4u65UlHZOE96yR"
     const val EMAILJS_API_URL = "https://api.emailjs.com/api/v1.0/email/send"
+
+    // EmailJS account 2 — used by the 6-digit OTP verification flow (matches PWA)
+    const val EMAILJS_VERIFICATION_PUBLIC_KEY = "iq8pJ8vc0CW3xnPJ-"
+    const val EMAILJS_VERIFICATION_SERVICE_ID = "service_hgrfj7d"
+    const val EMAILJS_VERIFICATION_TEMPLATE_ID = "template_boi1jmq"
 
     const val MAPBOX_TOKEN = "pk.eyJ1Ijoic29qaXlvdSIsImEiOiJjbWk4ZXRybmgwYmxkMmlweHNiNHhnM3V2In0.zIlAkkuMeFdQV9FPR6OgkQ"
 }

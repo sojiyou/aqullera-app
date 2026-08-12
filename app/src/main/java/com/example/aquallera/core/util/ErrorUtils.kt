@@ -1,5 +1,6 @@
 package com.example.aquallera.core.util
 
+/** Maps Firebase exceptions to messages fit to show a user. */
 object ErrorUtils {
     private val authErrors = mapOf(
         "ERROR_EMAIL_ALREADY_IN_USE" to "This email is already registered. Try logging in instead.",
@@ -15,6 +16,7 @@ object ErrorUtils {
         "ERROR_OPERATION_NOT_ALLOWED" to "Email/password sign-in is not enabled.",
     )
 
+    /** Returns a plain-language message for [exception], falling back to a generic one. */
     fun getFirebaseErrorMessage(exception: Exception): String {
         val message = exception.message ?: return "An unexpected error occurred."
         val key = authErrors.keys.find { message.contains(it, ignoreCase = true) }

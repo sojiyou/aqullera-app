@@ -1,6 +1,5 @@
 package com.example.aquallera.core.util
 
-import com.example.aquallera.core.model.Order
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
@@ -8,27 +7,27 @@ import java.io.OutputStreamWriter
 import java.net.HttpURLConnection
 import java.net.URL
 
+/** Sends the 6-digit verification emails through the EmailJS REST API. */
 object EmailService {
 
-    suspend fun sendOrderConfirmation(order: Order): Boolean = withContext(Dispatchers.IO) {
-        try {
-            val payload = JSONObject().apply {
-                put("service_id", Constants.EMAILJS_SERVICE_ID)
-                put("template_id", Constants.EMAILJS_TEMPLATE_ID)
-                put("user_id", Constants.EMAILJS_PUBLIC_KEY)
+    /** Emails [code] to [email]; true only when EmailJS responds 200. */
+    suspend fun sendVerificationCode(email: String, code: String): Boolean = withContext(Dispatchers.IO) {
+        post(
+            JSONObject().apply {
+                put("service_id", Constants.EMAILJS_VERIFICATION_SERVICE_ID)
+                put("template_id", Constants.EMAILJS_VERIFICATION_TEMPLATE_ID)
+                put("user_id", Constants.EMAILJS_VERIFICATION_PUBLIC_KEY)
                 put("template_params", JSONObject().apply {
-                    put("to_email", order.userEmail)
-                    put("customer_name", order.customerName)
-                    put("station_name", order.stationName)
-                    put("order_type", order.orderType)
-                    put("order_date", order.date)
-                    put("order_time", order.time)
-                    put("reference_number", order.referenceNumber)
-                    put("total", String.format("%.2f", order.grandTotal))
-                    put("status", order.status)
+                    put("to_email", email)
+                    put("code", code)
+                    put("app_name", "Aquallera")
                 })
             }
+        )
+    }
 
+    private fun post(payload: JSONObject): Boolean {
+        return try {
             val url = URL(Constants.EMAILJS_API_URL)
             val connection = url.openConnection() as HttpURLConnection
             connection.requestMethod = "POST"

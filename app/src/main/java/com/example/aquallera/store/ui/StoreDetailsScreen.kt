@@ -12,12 +12,14 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -25,7 +27,6 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -38,7 +39,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -52,6 +52,7 @@ import com.example.aquallera.core.theme.StatusCompleted
 import com.example.aquallera.core.theme.StatusOnDelivery
 import com.example.aquallera.core.util.TimeUtils
 
+/** Station details: info, hours, prices and the order/pickup entry point. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun StoreDetailsScreen(
@@ -116,17 +117,20 @@ private fun StoreDetailsContent(
             .verticalScroll(rememberScrollState()),
     ) {
         HeaderSection(station)
+        val documentKeys = station.verifiedDocumentKeys
+        if (documentKeys.isNotEmpty()) {
+            Spacer(modifier = Modifier.height(8.dp))
+            VerifiedDocumentsCard(documentKeys)
+        }
         Spacer(modifier = Modifier.height(8.dp))
         BusinessHoursCard(station.businessHours)
         Spacer(modifier = Modifier.height(8.dp))
         ServicesCard(station.serviceTypes)
-        if (station.serviceTypes.contains("delivery") && !station.deliveryDays.isNullOrEmpty()) {
+        if (station.serviceTypes.contains("delivery") &&
+            (!station.deliveryDays.isNullOrEmpty() || !station.deliveryHours.isNullOrEmpty())
+        ) {
             Spacer(modifier = Modifier.height(8.dp))
-            DeliveryDaysCard(station.deliveryDays)
-        }
-        if (station.serviceTypes.contains("delivery") && !station.deliveryHours.isNullOrEmpty()) {
-            Spacer(modifier = Modifier.height(8.dp))
-            DeliveryHoursCard(station.deliveryHours)
+            DeliveryScheduleCard(station.deliveryDays, station.deliveryHours)
         }
         Spacer(modifier = Modifier.height(8.dp))
         PricingCard(station)
@@ -311,7 +315,13 @@ private fun ServicesCard(serviceTypes: List<String>) {
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun DeliveryDaysCard(deliveryDays: List<String>) {
+private fun VerifiedDocumentsCard(documentKeys: List<String>) {
+    val labels = mapOf(
+        "businessPermit" to "BP",
+        "dtiSecRegistration" to "DTI",
+        "fdaLto" to "FDA",
+        "sanitaryPermit" to "SP",
+    )
     Card(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
         shape = RoundedCornerShape(12.dp),
@@ -319,22 +329,33 @@ private fun DeliveryDaysCard(deliveryDays: List<String>) {
         colors = CardDefaults.cardColors(containerColor = Color.White),
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
-            Text("Delivery Days", fontWeight = FontWeight.Bold, fontSize = 18.sp, color = MidnightBlue)
+            Text("Verified Documents", fontWeight = FontWeight.Bold, fontSize = 18.sp, color = MidnightBlue)
             Spacer(modifier = Modifier.height(8.dp))
             FlowRow(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
-                deliveryDays.forEach { day ->
-                    Text(
-                        text = day.replaceFirstChar { it.uppercase() },
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Medium,
-                        color = MidnightBlue,
+                documentKeys.forEach { key ->
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier
-                            .background(OrderListBg, RoundedCornerShape(16.dp))
+                            .background(Color(0xFFE8F5E9), RoundedCornerShape(16.dp))
                             .padding(horizontal = 12.dp, vertical = 6.dp),
-                    )
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.CheckCircle,
+                            contentDescription = null,
+                            tint = Color(0xFF2E7D32),
+                            modifier = Modifier.size(14.dp),
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = labels[key] ?: key,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = Color(0xFF2E7D32),
+                        )
+                    }
                 }
             }
         }
@@ -343,7 +364,7 @@ private fun DeliveryDaysCard(deliveryDays: List<String>) {
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun DeliveryHoursCard(deliveryHours: List<String>) {
+private fun DeliveryScheduleCard(deliveryDays: List<String>?, deliveryHours: List<String>?) {
     Card(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
         shape = RoundedCornerShape(12.dp),
@@ -351,30 +372,42 @@ private fun DeliveryHoursCard(deliveryHours: List<String>) {
         colors = CardDefaults.cardColors(containerColor = Color.White),
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
-            Text("Delivery Hours", fontWeight = FontWeight.Bold, fontSize = 18.sp, color = MidnightBlue)
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(
-                text = "Available delivery time slots",
-                fontSize = 12.sp,
-                color = Color.Gray,
-                modifier = Modifier.padding(bottom = 8.dp),
-            )
-            FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(4.dp),
-            ) {
-                deliveryHours.forEach { time ->
-                    Text(
-                        text = time,
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Medium,
-                        color = MidnightBlue,
-                        modifier = Modifier
-                            .background(OrderListBg, RoundedCornerShape(16.dp))
-                            .padding(horizontal = 12.dp, vertical = 6.dp),
-                    )
-                }
+            Text("Delivery Schedule", fontWeight = FontWeight.Bold, fontSize = 18.sp, color = MidnightBlue)
+            Spacer(modifier = Modifier.height(8.dp))
+
+            if (!deliveryDays.isNullOrEmpty()) {
+                Text("Days", fontSize = 12.sp, color = Color.Gray)
+                Spacer(modifier = Modifier.height(4.dp))
+                ChipRow(deliveryDays.map { it.replaceFirstChar { c -> c.uppercase() } })
+                Spacer(modifier = Modifier.height(12.dp))
             }
+
+            if (!deliveryHours.isNullOrEmpty()) {
+                Text("Hours", fontSize = 12.sp, color = Color.Gray)
+                Spacer(modifier = Modifier.height(4.dp))
+                ChipRow(deliveryHours.map { TimeUtils.to12Hour(it) })
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun ChipRow(labels: List<String>) {
+    FlowRow(
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        labels.forEach { label ->
+            Text(
+                text = label,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Medium,
+                color = MidnightBlue,
+                modifier = Modifier
+                    .background(OrderListBg, RoundedCornerShape(16.dp))
+                    .padding(horizontal = 12.dp, vertical = 6.dp),
+            )
         }
     }
 }
@@ -391,30 +424,24 @@ private fun PricingCard(station: WaterStation) {
             Text("Price List", fontWeight = FontWeight.Bold, fontSize = 18.sp, color = MidnightBlue)
             Spacer(modifier = Modifier.height(10.dp))
 
-            val hasPure = station.pricing_gallon_pure != null
-            val hasSpring = station.pricing_gallon_spring != null || station.pricing_liter_spring != null
-            val hasMineral = station.pricing_gallon_mineral != null
+            val cells = listOfNotNull(
+                if (station.offers("pure")) "Pure (Gallon)" to station.pricing_gallon_pure else null,
+                if (station.offers("spring")) "Spring (Gallon)" to station.springPrice else null,
+                if (station.offers("mineral")) "Mineral (Gallon)" to station.pricing_gallon_mineral else null,
+            )
 
-            if (hasPure || hasSpring || hasMineral) {
+            if (cells.any { it.second != null }) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    PricingCell(
-                        label = "Pure (Gallon)",
-                        price = station.pricing_gallon_pure,
-                        modifier = Modifier.weight(1f),
-                    )
-                    PricingCell(
-                        label = "Spring (Gallon)",
-                        price = station.pricing_liter_spring ?: station.pricing_gallon_spring,
-                        modifier = Modifier.weight(1f),
-                    )
-                    PricingCell(
-                        label = "Mineral (Gallon)",
-                        price = station.pricing_gallon_mineral,
-                        modifier = Modifier.weight(1f),
-                    )
+                    cells.forEach { (label, price) ->
+                        PricingCell(
+                            label = label,
+                            price = price,
+                            modifier = Modifier.weight(1f),
+                        )
+                    }
                 }
             } else {
                 Text("No pricing available", fontSize = 14.sp, color = Color.Gray)

@@ -13,75 +13,25 @@ import kotlinx.coroutines.tasks.await
 import javax.inject.Inject
 import javax.inject.Singleton
 
+/** Reads water station records from `/waterStations`. */
 @Singleton
 class StationRepository @Inject constructor(
     private val firebaseDatabase: FirebaseDatabase,
 ) {
-    suspend fun getAllStations(): Result<List<WaterStation>> {
-        return try {
-            val ref = firebaseDatabase.getReference("waterStations")
-            Log.i("StationRepo", "Fetching from: ${ref.toString()}")
-            val snapshot = ref.get().await()
-            Log.i("StationRepo", "Snapshot exists: ${snapshot.exists()}, children: ${snapshot.childrenCount}")
-            val stations = snapshot.children.mapNotNull { child ->
-                val raw = child.value as? Map<*, *>
-                if (raw != null) {
-                    Log.i("StationRepo", "Child[${child.key}] keys: ${raw.keys.joinToString(", ")}")
-                } else {
-                    Log.w("StationRepo", "Child[${child.key}] value is not a Map: ${child.value?.javaClass?.name}")
-                }
-                try {
-                    child.getValue(WaterStation::class.java)?.copy(id = child.key ?: "")
-                } catch (e: Exception) {
-                    Log.e("StationRepo", "Failed to parse child[${child.key}]: ${e.message}", e)
-                    null
-                }
-            }
-            Log.i("StationRepo", "Parsed ${stations.size} stations")
-            Result.success(stations)
-        } catch (e: Exception) {
-            Log.e("StationRepo", "Error fetching stations", e)
-            Result.failure(e)
-        }
+    /** One-shot fetch of a single station; the result holds null when the record does not exist. */
+    suspend fun getStationById(stationId: String): Result<WaterStation?> = try {
+        val snapshot = firebaseDatabase.getReference("waterStations").child(stationId).get().await()
+        Result.success(snapshot.toStation(stationId))
+    } catch (e: Exception) {
+        Result.failure(e)
     }
 
-    suspend fun getStationById(stationId: String): Result<WaterStation?> {
-        return try {
-            val snapshot = firebaseDatabase.getReference("waterStations").child(stationId).get().await()
-            val station = snapshot.getValue(WaterStation::class.java)?.copy(id = stationId)
-            Result.success(station)
-        } catch (e: Exception) {
-            Result.failure(e)
-        }
-    }
-
-    suspend fun getOnlineStations(): Result<List<WaterStation>> {
-        return try {
-            val snapshot = firebaseDatabase.getReference("waterStations")
-                .orderByChild("isOnline")
-                .equalTo(true)
-                .get()
-                .await()
-            val stations = snapshot.children.mapNotNull { child ->
-                child.getValue(WaterStation::class.java)?.copy(id = child.key ?: "")
-            }
-            Result.success(stations)
-        } catch (e: Exception) {
-            Result.failure(e)
-        }
-    }
-
+    /** Emits the station on every change, so online/offline edits from the admin site appear live. */
     fun getStationByIdFlow(stationId: String): Flow<WaterStation?> = callbackFlow {
         val ref = firebaseDatabase.getReference("waterStations").child(stationId)
         val listener = object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
-                try {
-                    val station = snapshot.getValue(WaterStation::class.java)?.copy(id = stationId)
-                    trySend(station)
-                } catch (e: Exception) {
-                    Log.e("StationRepo", "Failed to parse station $stationId: ${e.message}", e)
-                    trySend(null)
-                }
+                trySend(snapshot.toStation(stationId))
             }
 
             override fun onCancelled(error: DatabaseError) {
@@ -92,19 +42,12 @@ class StationRepository @Inject constructor(
         awaitClose { ref.removeEventListener(listener) }
     }
 
+    /** Emits the whole station list on every change. Unreadable records are skipped, not fatal. */
     fun getAllStationsFlow(): Flow<List<WaterStation>> = callbackFlow {
         val ref = firebaseDatabase.getReference("waterStations")
         val listener = object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
-                val stations = snapshot.children.mapNotNull { child ->
-                    try {
-                        child.getValue(WaterStation::class.java)?.copy(id = child.key ?: "")
-                    } catch (e: Exception) {
-                        Log.e("StationRepo", "Failed to parse child[${child.key}]: ${e.message}", e)
-                        null
-                    }
-                }
-                trySend(stations)
+                trySend(snapshot.children.mapNotNull { child -> child.toStation(child.key ?: "") })
             }
 
             override fun onCancelled(error: DatabaseError) {
@@ -113,5 +56,28 @@ class StationRepository @Inject constructor(
         }
         ref.addValueEventListener(listener)
         awaitClose { ref.removeEventListener(listener) }
+    }
+
+    /**
+     * Deserialises one station record, returning null if it cannot be read.
+     *
+     * The online flag is written as `online` by the admin site but as `isOnline` by some older
+     * records, so it is resolved from the raw map instead of relying on the data class mapping
+     * alone. Only the list query used to do this, which could show a station as online in the
+     * list while its details screen said offline.
+     */
+    private fun DataSnapshot.toStation(id: String): WaterStation? = try {
+        getValue(WaterStation::class.java)?.copy(id = id)?.apply {
+            val raw = value as? Map<*, *>
+            isOnline = when (val flag = raw?.get("online") ?: raw?.get("isOnline")) {
+                is Boolean -> flag
+                is String -> flag.equals("true", ignoreCase = true)
+                is Number -> flag.toInt() != 0
+                else -> false
+            }
+        }
+    } catch (e: Exception) {
+        Log.e("StationRepo", "Failed to parse station[$id]: ${e.message}", e)
+        null
     }
 }
