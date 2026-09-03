@@ -35,11 +35,11 @@ class ProfileViewModel @Inject constructor(
     val uiState: StateFlow<ProfileUiState> = _uiState.asStateFlow()
 
     init {
-        loadProfile()
+        refresh()
     }
 
-    /** Loads the profile row plus the shared verification flag. */
-    private fun loadProfile() {
+/** Loads the profile row plus the shared verification flag. */
+    fun refresh() {
         val firebaseUser = authRepository.getCurrentUser() ?: run {
             _uiState.value = ProfileUiState(error = "Not logged in", loading = false)
             return

@@ -2,6 +2,7 @@ package com.example.aquallera.auth.data
 
 import com.example.aquallera.core.model.User
 import com.example.aquallera.core.util.EmailService
+import com.google.firebase.auth.EmailAuthProvider
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseUser
 import com.google.firebase.auth.UserProfileChangeRequest
@@ -53,6 +54,50 @@ class AuthRepository @Inject constructor(
         firebaseAuth.currentUser?.updateProfile(request)?.await()
     }
 
+    /** Updates the Firebase Auth email after re-authenticating with the password. */
+    suspend fun reauthenticateAndUpdateEmail(password: String, newEmail: String) {
+        val user = firebaseAuth.currentUser
+            ?: throw Exception("Not logged in.")
+        val currentEmail = user.email
+            ?: throw Exception("No email on this account.")
+        val credential = EmailAuthProvider.getCredential(currentEmail, password)
+        user.reauthenticate(credential).await()
+        user.updateEmail(newEmail).await()
+    }
+
+    /** Writes a fresh 6-digit code to /emailChange/{uid} — separate from signup verification. */
+    suspend fun sendEmailChangeCode(newEmail: String): Boolean {
+        val user = firebaseAuth.currentUser ?: return false
+        val code = (100000..999999).random().toString()
+        firebaseDatabase.getReference("emailChange").child(user.uid).setValue(
+            mapOf(
+                "code" to code,
+                "newEmail" to newEmail,
+                "createdAt" to System.currentTimeMillis(),
+                "verified" to false,
+            )
+        ).await()
+        return EmailService.sendVerificationCode(newEmail, code)
+    }
+
+    /** Validates the email-change code; keeps the signup verification flag unchanged. */
+    suspend fun verifyEmailChangeCode(input: String): String? {
+        val user = firebaseAuth.currentUser ?: return "Not logged in."
+        val ref = firebaseDatabase.getReference("emailChange").child(user.uid)
+        val snapshot = ref.get().await()
+        if (!snapshot.exists()) return "No verification code found. Please resend."
+        if (snapshot.child("verified").getValue(Boolean::class.java) == true) return null
+        val createdAt = snapshot.child("createdAt").getValue(Long::class.java) ?: 0L
+        if (System.currentTimeMillis() - createdAt > 600000) return "Code expired. Please resend."
+        if (input != snapshot.child("code").getValue(String::class.java)) return "Incorrect code. Try again."
+        ref.child("verified").setValue(true).await()
+        // Keep the subscriber verified in the signup node too, so the app never treats
+        // them as a failed new signup while they were mid email-change.
+        firebaseDatabase.getReference("emailVerification").child(user.uid).child("verified")
+            .setValue(true).await()
+        return null
+    }
+
     /** Writes the initial `/users/{uid}` profile row. */
     suspend fun createUserProfile(uid: String, fullName: String, email: String, number: String) {
         val user = User(
@@ -78,9 +123,9 @@ class AuthRepository @Inject constructor(
     }
 
     /** Writes a fresh 6-digit code to /emailVerification/{uid} and emails it via EmailJS. */
-    suspend fun sendVerificationCode(): Boolean {
+    suspend fun sendVerificationCode(emailOverride: String? = null): Boolean {
         val user = firebaseAuth.currentUser ?: return false
-        val email = user.email ?: return false
+        val email = emailOverride ?: user.email ?: return false
         val code = (100000..999999).random().toString()
         firebaseDatabase.getReference("emailVerification").child(user.uid).setValue(
             mapOf(

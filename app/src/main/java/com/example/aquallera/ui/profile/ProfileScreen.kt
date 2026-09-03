@@ -46,8 +46,10 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavHostController
+import com.example.aquallera.navigation.Routes
 import com.example.aquallera.components.LoadingIndicator
 import com.example.aquallera.core.theme.AppBg
 import com.example.aquallera.core.theme.MidnightBlue
@@ -79,6 +81,11 @@ fun ProfileScreen(
         }
     }
     val state by viewModel.uiState.collectAsState()
+
+    LifecycleResumeEffect(Unit) {
+        viewModel.refresh()
+        onPauseOrDispose { }
+    }
 
     when {
         state.loading -> LoadingIndicator()
@@ -150,7 +157,7 @@ fun ProfileScreen(
                         ProfileActionRow(
                             icon = Icons.Default.Person,
                             label = "Edit Profile",
-                            onClick = { navigateToTab("edit_profile") },
+                            onClick = { navController?.navigate(Routes.EDIT_PROFILE) },
                         )
                         HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
                         ProfileActionRow(

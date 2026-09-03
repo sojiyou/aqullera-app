@@ -1,14 +1,19 @@
 package com.example.aquallera.ui.profile
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -29,11 +34,16 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -266,4 +276,150 @@ fun EditProfileScreen(
             containerColor = Color.White,
         )
     }
+
+    if (state.showOtpDialog) {
+        AlertDialog(
+            onDismissRequest = { viewModel.dismissOtpDialog() },
+            title = { Text("Verify New Email", color = MidnightBlue, fontSize = 18.sp, fontWeight = FontWeight.Bold) },
+            text = {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(
+                        text = "Enter the 6-digit code sent to:",
+                        fontSize = 14.sp,
+                        color = Color.Gray,
+                        textAlign = TextAlign.Center,
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = state.otpSentTo ?: "",
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MidnightBlue,
+                        textAlign = TextAlign.Center,
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                    OtpInput(
+                        code = state.otpCode,
+                        onCodeChanged = { viewModel.onOtpChanged(it) },
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text(
+                        text = "Confirm your password to update email:",
+                        fontSize = 13.sp,
+                        color = Color.Gray,
+                        textAlign = TextAlign.Center,
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    AqualleraInput(
+                        label = "Password",
+                        value = state.password,
+                        onValueChange = { viewModel.onPasswordChanged(it) },
+                        type = KeyboardType.Password,
+                        imeAction = ImeAction.Done,
+                        isPassword = true,
+                        onImeAction = { viewModel.verifyOtp() },
+                    )
+                    if (state.otpError != null) {
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Text(
+                            text = state.otpError ?: "",
+                            color = Color(0xFFB71C1C),
+                            fontSize = 13.sp,
+                            textAlign = TextAlign.Center,
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(12.dp))
+                    val otpResendLabel = when {
+                        state.sendingOtp -> "Sending..."
+                        state.otpCooldown > 0 -> "Resend in ${state.otpCooldown}s"
+                        else -> "Resend code"
+                    }
+                    OtpResendText(
+                        label = otpResendLabel,
+                        enabled = state.otpCooldown == 0 && !state.sendingOtp,
+                        onClick = { viewModel.resendOtp() },
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = { viewModel.verifyOtp() },
+                    enabled = state.otpCode.length == 6 && state.password.isNotBlank() && !state.verifying,
+                ) {
+                    Text(
+                        text = if (state.verifying) "Verifying..." else "Verify",
+                        color = MidnightBlue,
+                        fontWeight = FontWeight.Medium,
+                    )
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { viewModel.dismissOtpDialog() }, enabled = !state.verifying) {
+                    Text("Later", color = Color.Gray)
+                }
+            },
+            containerColor = Color.White,
+        )
+    }
+}
+
+@Composable
+private fun OtpInput(code: String, onCodeChanged: (String) -> Unit) {
+    Box(
+        modifier = Modifier.widthIn(max = 320.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        BasicTextField(
+            value = code,
+            onValueChange = onCodeChanged,
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
+            singleLine = true,
+            textStyle = TextStyle(
+                color = MidnightBlue,
+                fontSize = 28.sp,
+                fontWeight = FontWeight.Bold,
+                textAlign = TextAlign.Center,
+                letterSpacing = 10.sp,
+            ),
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(60.dp)
+                .clip(RoundedCornerShape(12.dp))
+                .background(Color(0xFFF1F5F9)),
+            decorationBox = { innerTextField ->
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    if (code.isEmpty()) {
+                        Text(
+                            text = "000000",
+                            color = Color.LightGray,
+                            fontSize = 28.sp,
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = 10.sp,
+                        )
+                    }
+                    innerTextField()
+                }
+            },
+        )
+    }
+}
+
+@Composable
+private fun OtpResendText(
+    label: String,
+    enabled: Boolean,
+    onClick: () -> Unit,
+) {
+    Text(
+        text = label,
+        color = if (enabled) MidnightBlue else Color.Gray,
+        fontSize = 14.sp,
+        textDecoration = if (enabled) TextDecoration.Underline else null,
+        modifier = Modifier
+            .clickable(enabled = enabled) { onClick() }
+            .padding(8.dp),
+    )
 }

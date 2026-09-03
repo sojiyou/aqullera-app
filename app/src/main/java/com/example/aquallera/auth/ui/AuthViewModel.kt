@@ -77,6 +77,10 @@ class AuthViewModel @Inject constructor(
 
     private var authListener: FirebaseAuth.AuthStateListener? = null
 
+    /** True only between a fresh signup and its OTP being accepted, so the delete-on-leave
+     *  guard never removes an established, already-verified account (e.g. mid email change). */
+    private var pendingSignup = false
+
     init {
         authListener = FirebaseAuth.AuthStateListener { firebaseAuth ->
             val user = firebaseAuth.currentUser
@@ -222,6 +226,7 @@ class AuthViewModel @Inject constructor(
                             number = state.number,
                         )
                         authRepository.sendVerificationCode()
+                        pendingSignup = true
                         _authState.value = AuthState.Authenticated(firebaseUser)
                         _signupState.value = _signupState.value.copy(loading = false, error = null)
                         _verifyState.value = VerifyEmailUiState(email = state.email)
@@ -264,7 +269,10 @@ class AuthViewModel @Inject constructor(
                     error = error,
                     showPrivacy = error == null,
                 )
-                if (error == null) refreshEmailVerified()
+                if (error == null) {
+                        pendingSignup = false
+                        refreshEmailVerified()
+                    }
             } catch (_: Exception) {
                 _verifyState.value = _verifyState.value.copy(
                     verifying = false,
@@ -310,7 +318,12 @@ class AuthViewModel @Inject constructor(
     fun abandonUnverifiedSignup() {
         viewModelScope.launch {
             try {
-                if (!authRepository.isEmailVerified()) authRepository.deleteAccount()
+                // Only delete an account created during the current signup session. An
+                // established, already-verified user (e.g. mid email change) is never deleted.
+                if (pendingSignup && !authRepository.isEmailVerified()) {
+                    pendingSignup = false
+                    authRepository.deleteAccount()
+                }
             } catch (_: Exception) {
                 // Deletion can fail (e.g. stale credentials); sign out anyway so the user isn't stuck.
             }
@@ -320,6 +333,7 @@ class AuthViewModel @Inject constructor(
 
     /** Signs out and clears every auth-related UI state. */
     fun logout() {
+        pendingSignup = false
         authRepository.signOut()
         _authState.value = AuthState.Unauthenticated
         _loginState.value = LoginUiState()
