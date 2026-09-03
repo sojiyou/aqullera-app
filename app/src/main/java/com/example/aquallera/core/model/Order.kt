@@ -27,7 +27,6 @@ data class Order(
     val deliveryFee: Double = 0.0,
     val transactionFee: Double = 0.0,
     val grandTotal: Double = 0.0,
-    val locationDetails: String = "",
     val deliveryAddress: String = "",
     val deliveryLatitude: Double = 0.0,
     val deliveryLongitude: Double = 0.0,
@@ -35,5 +34,4 @@ data class Order(
     val paymentMethod: String = "Cash on Delivery",
     val status: String = "Pending",
     val createdAt: String = "",
-    val updatedAt: String = "",
 )

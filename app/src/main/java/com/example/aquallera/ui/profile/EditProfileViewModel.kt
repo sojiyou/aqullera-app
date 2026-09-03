@@ -87,11 +87,8 @@ class EditProfileViewModel @Inject constructor(
         }
     }
 
-    /** Updates the name field. */
     fun onNameChanged(value: String) { _uiState.value = _uiState.value.copy(name = value) }
-    /** Updates the email field. */
     fun onEmailChanged(value: String) { _uiState.value = _uiState.value.copy(email = value) }
-    /** Updates the phone field. */
     fun onNumberChanged(value: String) { _uiState.value = _uiState.value.copy(number = value) }
 
     /** Validates and saves name, email and phone. Triggers OTP re-verification when email changes. */

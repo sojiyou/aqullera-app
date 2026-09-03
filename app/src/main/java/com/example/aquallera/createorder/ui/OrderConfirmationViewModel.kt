@@ -76,13 +76,11 @@ class OrderConfirmationViewModel @Inject constructor(
                 transactionFee = data.transactionFee,
                 grandTotal = data.grandTotal,
                 deliveryAddress = data.deliveryAddress,
-                locationDetails = data.locationDetails,
                 additionalDetails = data.additionalDetails,
                 deliveryLatitude = data.deliveryLatitude,
                 deliveryLongitude = data.deliveryLongitude,
                 paymentMethod = data.paymentMethod,
                 createdAt = now,
-                updatedAt = now,
             )
 
             orderRepository.createOrder(order).fold(

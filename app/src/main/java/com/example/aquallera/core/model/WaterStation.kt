@@ -12,13 +12,9 @@ data class WaterStation(
 
     @PropertyName("status") val status: String = "pending",
     @PropertyName("stationName") val stationName: String = "",
-    @PropertyName("ownerName") val ownerName: String = "",
     @PropertyName("email") val email: String = "",
     @PropertyName("phone") val phone: String = "",
     @PropertyName("address") val address: String = "",
-    @PropertyName("city") val city: String = "",
-    @PropertyName("state") val state: String = "",
-    @PropertyName("zipCode") val zipCode: String = "",
 
     @PropertyName("latitude") val latitude: Double = 0.0,
     @PropertyName("longitude") val longitude: Double = 0.0,
@@ -29,7 +25,6 @@ data class WaterStation(
     @PropertyName("pricing_gallon_spring") val pricing_gallon_spring: Double? = null,
     @PropertyName("pricing_delivery_fee") val pricing_delivery_fee: Double? = null,
 
-    @PropertyName("deliveryRadius") val deliveryRadius: Long = 5L,
     @PropertyName("deliveryHours") val deliveryHours: List<String>? = null,
     @PropertyName("businessHours") val businessHours: Map<String, String> = emptyMap(),
     @PropertyName("serviceTypes") val serviceTypes: List<String> = emptyList(),
@@ -38,9 +33,6 @@ data class WaterStation(
     @PropertyName("waterTypes") val waterTypes: List<String>? = null,
     @PropertyName("businessPermitDocuments") val businessPermitDocuments: Map<String, Any>? = null,
     @PropertyName("about") val about: String = "",
-    @PropertyName("revokedAt") val revokedAt: Long? = null,
-    @PropertyName("createdAt") val createdAt: String = "",
-    @PropertyName("updatedAt") val updatedAt: String = "",
 ) {
     /** Mirrors the PWA: an absent or empty waterTypes list means the station offers all three. */
     fun offers(type: String): Boolean =
@@ -65,10 +57,10 @@ data class WaterStation(
             }
             .keys.toList()
 
-    /** Straight-line distance to the user, using Android's location API with a fallback. */
-    fun calculateDistanceTo(userLat: Double, userLon: Double): DistanceResult {
+    /** Human-readable straight-line distance to the user, using Android's location API with a fallback. */
+    fun calculateDistanceTo(userLat: Double, userLon: Double): String {
         if (latitude == 0.0 && longitude == 0.0) {
-            return DistanceResult(meters = -1f, formatted = "Unknown", accuracyScore = 0.0)
+            return "Unknown"
         }
         val results = FloatArray(1)
         val distanceMeters = try {
@@ -77,11 +69,7 @@ data class WaterStation(
         } catch (_: Exception) {
             haversine(latitude, longitude, userLat, userLon).toFloat()
         }
-        return DistanceResult(
-            meters = distanceMeters,
-            formatted = formatDistance(distanceMeters.toDouble()),
-            accuracyScore = calculateAccuracyScore(latitude, longitude),
-        )
+        return formatDistance(distanceMeters.toDouble())
     }
 
     private fun haversine(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Double {
@@ -101,19 +89,6 @@ data class WaterStation(
         else -> "${(meters / 1000).roundToInt()} km"
     }
 
-    private fun calculateAccuracyScore(lat: Double, lon: Double): Double = when {
-        lat == 0.0 || lon == 0.0 -> 0.0
-        lat < -90 || lat > 90 || lon < -180 || lon > 180 -> 0.1
-        else -> 1.0
-    }
-
     private fun Double.roundToDecimal(places: Int): String = "%.${places}f".format(this)
     private fun Double.roundToInt(): Int = round(this).toInt()
 }
-
-/** Distance to a station in meters, a human-readable label, and a trust score for the lat/lng. */
-data class DistanceResult(
-    val meters: Float,
-    val formatted: String,
-    val accuracyScore: Double,
-)

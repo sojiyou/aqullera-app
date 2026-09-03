@@ -1,6 +1,6 @@
 package com.example.aquallera.core.model
 
-/** Profile row under `/users`; keeps both the old (name/number) and new field spellings. */
+/** Profile row under `/users`; supports two field-name conventions used by the admin site and the PWA. */
 data class User(
     val uid: String = "",
     val fullName: String = "",

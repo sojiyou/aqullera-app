@@ -20,7 +20,6 @@ data class PendingOrderData(
     val transactionFee: Double = 0.0,
     val grandTotal: Double = 0.0,
     val deliveryAddress: String = "",
-    val locationDetails: String = "",
     val additionalDetails: String = "",
     val paymentMethod: String = "Cash on Delivery",
     val orderType: String = "Delivery",

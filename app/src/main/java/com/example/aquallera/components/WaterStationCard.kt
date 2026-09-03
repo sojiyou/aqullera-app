@@ -46,7 +46,7 @@ fun WaterStationCard(
 ) {
     val distanceText = remember(station, userLat, userLng) {
         if (userLat != null && userLng != null) {
-            station.calculateDistanceTo(userLat, userLng).formatted
+            station.calculateDistanceTo(userLat, userLng)
         } else ""
     }
 

@@ -102,12 +102,10 @@ class AuthViewModel @Inject constructor(
         authListener?.let { firebaseAuth.removeAuthStateListener(it) }
     }
 
-    /** Updates the login email and clears any previous error. */
-    fun onLoginEmailChanged(email: String) {
+fun onLoginEmailChanged(email: String) {
         _loginState.value = _loginState.value.copy(email = email, error = null)
     }
 
-    /** Updates the login password and clears any previous error. */
     fun onLoginPasswordChanged(password: String) {
         _loginState.value = _loginState.value.copy(password = password, error = null)
     }

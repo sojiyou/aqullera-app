@@ -125,10 +125,6 @@ fun OrderConfirmationScreen(
             if (pendingOrder.deliveryAddress.isNotBlank()) {
                 InfoCard(title = "Delivery Address") {
                     Text(pendingOrder.deliveryAddress, fontSize = 14.sp, color = Color.DarkGray)
-                    if (pendingOrder.locationDetails.isNotBlank()) {
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(pendingOrder.locationDetails, fontSize = 12.sp, color = Color.Gray)
-                    }
                     if (pendingOrder.additionalDetails.isNotBlank()) {
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(pendingOrder.additionalDetails, fontSize = 12.sp, color = Color.Gray)

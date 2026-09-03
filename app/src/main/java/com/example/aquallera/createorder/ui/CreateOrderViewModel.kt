@@ -41,7 +41,6 @@ data class CreateOrderUiState(
     val springWaterQty: Int = 0,
     val mineralWaterQty: Int = 0,
     val deliveryAddress: String = "",
-    val locationDetails: String = "",
     val additionalDetails: String = "",
     val loading: Boolean = true,
     val error: String? = null,
@@ -194,13 +193,9 @@ class CreateOrderViewModel @Inject constructor(
         }
     }
 
-    /** Updates the pure-water quantity, never below zero. */
     fun onPureWaterQtyChanged(qty: Int) { _uiState.update { it.copy(pureWaterQty = maxOf(0, qty)) } }
-    /** Updates the spring-water quantity, never below zero. */
     fun onSpringWaterQtyChanged(qty: Int) { _uiState.update { it.copy(springWaterQty = maxOf(0, qty)) } }
-    /** Updates the mineral-water quantity, never below zero. */
     fun onMineralWaterQtyChanged(qty: Int) { _uiState.update { it.copy(mineralWaterQty = maxOf(0, qty)) } }
-    /** Updates the delivery notes field. */
     fun onAdditionalDetailsChanged(v: String) { _uiState.update { it.copy(additionalDetails = v) } }
 
     /** Switches Delivery/Pickup, which also toggles the delivery fee in the totals. */
@@ -208,12 +203,10 @@ class CreateOrderViewModel @Inject constructor(
         _uiState.update { it.copy(orderType = type) }
     }
 
-    /** Sets the requested delivery date. */
     fun onPreferredDateChanged(date: String) {
         _uiState.update { it.copy(preferredDate = date) }
     }
 
-    /** Sets the requested pickup time. */
     fun onPreferredTimeChanged(time: String) {
         _uiState.update { it.copy(preferredTime = time) }
     }
@@ -294,7 +287,6 @@ class CreateOrderViewModel @Inject constructor(
                 transactionFee = s.transactionFee,
                 grandTotal = s.grandTotal,
                 deliveryAddress = s.deliveryAddress,
-                locationDetails = s.locationDetails,
                 additionalDetails = s.additionalDetails,
                 orderType = s.orderType,
                 preferredDate = s.preferredDate,

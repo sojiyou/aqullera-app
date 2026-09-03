@@ -21,6 +21,4 @@ val StatusReady = Color(0xFF009688)
 val StatusCompleted = Color(0xFF4CAF50)
 val StatusCancelled = Color(0xFFF44336)
 
-val Gray300 = Color(0xFFD3D3D3)
-val Gray500 = Color(0xFF6B7280)
 val Gray600 = Color(0xFF4B5563)
