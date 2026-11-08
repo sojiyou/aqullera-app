@@ -164,14 +164,18 @@ Run from the project root.
 
 First build takes ~2–3 minutes; later builds are 30–60s.
 
-### Signing caveat
+### Signing
 
-The debug signing config previously pointed at `%TEMP%`, which Windows periodically wipes — losing
-the keystore makes every existing install impossible to update (`INSTALL_FAILED_UPDATE_INCOMPATIBLE`),
-requiring an uninstall. It now uses the standard `~/.android/debug.keystore`. Do not move it back.
+The `debug` signing config points at `~/.android/debug.keystore`. Do not point it back at `%TEMP%`
+— Windows wipes it and every existing install then fails to update
+(`INSTALL_FAILED_UPDATE_INCOMPATIBLE`), requiring an uninstall.
 
-The `release` build type has no signing config, so `assembleRelease` produces an **unsigned APK that
-cannot be installed**. Add a release signing config before distributing a release build.
+The `release` build type is signed from a gitignored `keystore.properties` at the project root
+(`storeFile`, `storePassword`, `keyAlias`, `keyPassword`). Without that file, `assembleRelease`
+produces an **unsigned APK that cannot be installed**. When it is present, `assembleRelease`
+emits a signed, installable APK at `app/build/outputs/apk/release/app-release.apk`; the packaged
+release artifact is `dist/apk/aquallera-v1.1.apk`. Rebuild it after a version bump with
+`gradlew.bat --no-daemon assembleRelease`.
 
 ---
 
